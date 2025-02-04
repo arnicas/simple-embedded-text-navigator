@@ -1,0 +1,352 @@
+body {
+    font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+    margin: auto;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+}
+
+#container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.container {
+    display: flex;
+}
+
+
+#content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 1200px; /* Adjust as needed */
+    margin: 0 auto;
+    padding: 20px;
+}
+
+#loading {
+    width: 100%;
+    height: 100vh;
+    display: none;
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+#textContainer {
+    width: 100%;
+    max-height: 60vh;
+    max-width: 650px;
+    background-color: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+#text {
+    font-size: 20px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+#relatedItems {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 10px;
+    text-align: center;
+    max-width: 100%;
+}
+
+#score-container {
+    width: 100%;
+    flex-wrap: nowrap;
+    justify-content: space-around;
+    margin-bottom: 10px;
+    padding: 5px 0;
+}
+
+#sourceContainer {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+#titlerow, #otherRows {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom:  5px;
+}
+.relatedItems {
+    width: 48%; /* Slightly less than 50% to account for spacing */
+    padding: 5px;
+    text-align: center;
+    background-color: #f0f0f0; /* Light grey background */
+    border-radius: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#relatedAuthor {
+    font-weight: bold;
+    font-size: 14px;
+}
+#relatedTitle {
+    font-size: 14px;
+    font-weight: bold;
+    font-style: italic;
+}
+
+#relatedId, #relatedScore {
+    font-style: italic;
+    font-size: 12px;
+}
+
+/* If you want to style individual items differently, you can add more specific rules here */
+.sidebar {
+    width: 200px;
+    background-color: #f6f1a5;
+    height: 100vh;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.hidden {
+    display: none;
+}
+
+#toggleSidebar {
+    align-self: flex-start;
+}
+
+.score-box {
+    background-color: white;
+    padding: 5px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 100px;
+    margin: 2px;
+}
+
+.score-row {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-around;
+    overflow-x: auto;
+}
+
+.score-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+}
+
+.score-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: .9em;
+}
+
+.score-value {
+    font-size: .9em;
+}
+
+
+
+/* Ensure the chart is hidden when needed */
+.hidden {
+    display: none !important;
+}
+
+.highlightSafe {
+    display: inline-block;
+    white-space: pre-wrap;
+    background: linear-gradient(
+        100deg,
+        #b8ffaf00 1%,
+        #b8ffaf 2.5%,
+        #b8ffaf80 5.7%,
+        #b8ffaf1a 93%,
+        #b8ffafb4 95%,
+        #b8ffaf00 98%
+      ),
+      linear-gradient(182deg, #b8ffaf00, #b8ffaf4d 8%, #b8ffaf00 15%);
+  }
+
+::selection {
+    background: #b8ffaf;
+    color: #000;
+}
+
+
+#scatterplot svg {
+    width: 100%;
+    height: 100%;
+}
+
+.point {
+    fill: rgb(192, 192, 240);
+    opacity: 0;
+}
+
+.point.highlighted {
+    fill: pink;
+    stroke: #000;
+    opacity: 0.8;
+}
+
+
+.point.latest {
+    fill: rgb(255, 191, 0);
+    stroke: #000;
+    opacity: 1;
+}
+
+.point-label {
+    font-size: 10px;
+    opacity: 0.8;
+    text-anchor: middle;
+    fill: rgb(45, 31, 4);
+}
+
+.connection-line {
+    stroke: black;
+    stroke-width: 1;
+    stroke-dasharray: 4,4;  /* Creates the dotted effect: 4px dash, 4px gap */
+    opacity: 0.5;
+    fill: none;
+}
+
+.cluster-icon {
+    pointer-events: none;
+    z-index: 10;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background: radial-gradient(
+        circle at center,
+        rgba(255, 255, 255, 0.9) 0%,    /* Nearly opaque white at center */
+        rgba(255, 255, 255, 0.7) 30%,    /* Semi-transparent white */
+        rgba(255, 255, 255, 0.3) 60%,    /* More transparent */
+        rgba(255, 255, 255, 0) 100%      /* Fully transparent at edge */
+    );
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));  /* Optional: adds a subtle glow */
+}
+
+.tooltip {
+    position: absolute;
+    z-index: 1000;
+    background-color: white;
+    padding: 5px;
+    border: 1px solid black;
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+button {
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    cursor: pointer;
+}
+
+.alegreya-sc-regular {
+    font-family: "Alegreya SC", serif;
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  .alegreya-sc-medium {
+    font-family: "Alegreya SC", serif;
+    font-weight: 500;
+    font-style: normal;
+  }
+  
+  .alegreya-sc-bold {
+    font-family: "Alegreya SC", serif;
+    font-weight: 700;
+    font-style: normal;
+    stroke: rgb(248, 185, 23);
+    fill: rgba(38, 37, 31, 0.967);
+  }
+  
+  .alegreya-sc-extrabold {
+    font-family: "Alegreya SC", serif;
+    font-weight: 800;
+    font-style: normal;
+  }
+  
+  .alegreya-sc-black {
+    font-family: "Alegreya SC", serif;
+    font-weight: 900;
+    font-style: normal;
+  }
+  
+  .alegreya-sc-regular-italic {
+    font-family: "Alegreya SC", serif;
+    font-weight: 400;
+    font-style: italic;
+  }
+  
+  .alegreya-sc-medium-italic {
+    font-family: "Alegreya SC", serif;
+    font-weight: 500;
+    font-style: italic;
+  }
+  
+  .alegreya-sc-bold-italic {
+    font-family: "Alegreya SC", serif;
+    font-weight: 700;
+    font-style: italic;
+  }
+  
+  .alegreya-sc-extrabold-italic {
+    font-family: "Alegreya SC", serif;
+    font-weight: 800;
+    font-style: italic;
+  }
+  
+  .alegreya-sc-black-italic {
+    font-family: "Alegreya SC", serif;
+    font-weight: 900;
+    font-style: italic;
+  }
+  
+.icon-labels-group text {
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+}
+
+/* Add a radial gradient background behind the text */
+.icon-labels-group text::before {
+    content: '';
+    position: absolute;
+    width: 120%;
+    height: 120%;
+    background: radial-gradient(
+        circle at center,
+        rgba(255, 255, 255, 0.9) 0%,    /* Nearly opaque white at center */
+        rgba(255, 255, 255, 0.7) 50%,    /* Semi-transparent white */
+        rgba(255, 255, 255, 0.3) 70%,    /* More transparent */
+        rgba(255, 255, 255, 0) 100%      /* Fully transparent at edge */
+    );
+    z-index: -1;
+}
+  
