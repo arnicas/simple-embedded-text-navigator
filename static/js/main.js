@@ -26,6 +26,9 @@ let currentResult = {
 let alreadySeen = [];
 let scores = {};
 
+// Global category counters that persist across sessions
+let globalCategoryCounts = {};
+
 
 function showLoading() {
   document.getElementById('loading').style.display = 'flex';
@@ -123,6 +126,52 @@ async function findRelatedText(selectedText) {
 }
 
 
+function filterOverlappingPhrases(phrases, text) {
+  // Sort phrases by length (longest first) to prioritize longer matches
+  const sortedPhrases = [...phrases].sort((a, b) => b.length - a.length);
+  const filteredPhrases = [];
+  const usedPositions = new Set();
+  
+  for (const phrase of sortedPhrases) {
+    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    let match;
+    let foundMatch = false;
+    
+    // Find all matches of this phrase
+    while ((match = regex.exec(text)) !== null) {
+      const start = match.index;
+      const end = match.index + match[0].length;
+      
+      // Check if this position overlaps with any already used position
+      let overlaps = false;
+      for (let i = start; i < end; i++) {
+        if (usedPositions.has(i)) {
+          overlaps = true;
+          break;
+        }
+      }
+      
+      // If no overlap, use this match
+      if (!overlaps) {
+        // Mark all positions as used
+        for (let i = start; i < end; i++) {
+          usedPositions.add(i);
+        }
+        foundMatch = true;
+      }
+      
+      // Reset regex lastIndex to continue searching
+      regex.lastIndex = match.index + 1;
+    }
+    
+    if (foundMatch) {
+      filteredPhrases.push(phrase);
+    }
+  }
+  
+  return filteredPhrases;
+}
+
 function getCategory(text) {
   const matches = [];
   const textLower = text.toLowerCase();
@@ -131,19 +180,24 @@ function getCategory(text) {
   for (const [categoryName, phrases] of Object.entries(categories)) {
     const matchedPhrases = [];
     
-    // Check each phrase in the category
+    // Check each phrase in the category (using word boundaries)
     for (const phrase of phrases) {
-      if (textLower.includes(phrase.toLowerCase())) {
+      const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      if (regex.test(textLower)) {
         matchedPhrases.push(phrase);
       }
     }
     
-    // If we found matches in this category, add them to results
+    // Filter out overlapping phrases (prioritize longer ones)
     if (matchedPhrases.length > 0) {
-      matches.push({
-        category: categoryName,
-        phrases: matchedPhrases
-      });
+      const filteredPhrases = filterOverlappingPhrases(matchedPhrases, textLower);
+      
+      if (filteredPhrases.length > 0) {
+        matches.push({
+          category: categoryName,
+          phrases: filteredPhrases
+        });
+      }
     }
   }
   
@@ -163,12 +217,18 @@ function createCategoryBuckets() {
     bucketDiv.id = `bucket-${categoryName}`;
     
     const img = document.createElement('img');
-    img.src = 'images/bucket.jpeg';
+    // Try to use category-specific image, fallback to generic bucket
+    img.src = `images/${categoryName}.jpg`;
     img.alt = categoryName;
+    
+    // Add error handler to fallback to generic bucket image
+    img.onerror = function() {
+      this.src = 'images/bucket.jpeg';
+    };
     
     const label = document.createElement('div');
     label.className = 'categoryLabel';
-    label.textContent = categoryName;
+    label.innerHTML = `${categoryName}<br><span class="category-count" id="count-${categoryName}">0</span>`;
     
     bucketDiv.appendChild(img);
     bucketDiv.appendChild(label);
@@ -176,28 +236,292 @@ function createCategoryBuckets() {
   });
 }
 
-function updateCategoryBuckets(selectedCategories, foundCategories) {
-  // Reset all buckets to inactive
-  const allBuckets = document.querySelectorAll('.categoryBucket');
-  allBuckets.forEach(bucket => {
-    bucket.classList.remove('active');
-    bucket.title = ''; // Clear tooltip
+function highlightPhrasesInText(text, categories) {
+  console.log('highlightPhrasesInText called with text:', text.substring(0, 100) + '...');
+  console.log('Categories to process:', categories);
+  
+  let highlightedText = text;
+  const highlights = [];
+  
+  // Process each category's phrases
+  categories.forEach(match => {
+    console.log(`Processing category: ${match.category} with phrases:`, match.phrases);
+    match.phrases.forEach(phrase => {
+      const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+      const matches = text.match(regex);
+      if (matches) {
+        console.log(`Found matches for "${phrase}":`, matches);
+      }
+      
+      highlightedText = highlightedText.replace(regex, (matchedPhrase, offset) => {
+        const highlightId = `highlight-${match.category}-${highlights.length}`;
+        highlights.push({
+          id: highlightId,
+          phrase: matchedPhrase,
+          category: match.category
+        });
+        console.log(`Created highlight: ${highlightId} for phrase: ${matchedPhrase}`);
+        return `<span class="phrase-highlight" id="${highlightId}" data-category="${match.category}">${matchedPhrase}</span>`;
+      });
+    });
   });
   
+  console.log(`Total highlights created: ${highlights.length}`);
+  return { highlightedText, highlights };
+}
+
+function animatePhrasesToBuckets(highlights, onComplete) {
+  console.log('animatePhrasesToBuckets called with highlights:', highlights);
+  
+  if (highlights.length === 0) {
+    if (onComplete) onComplete();
+    return;
+  }
+  
+  let completedAnimations = 0;
+  const totalAnimations = highlights.length;
+  
+  highlights.forEach((highlight, index) => {
+    // Small delay for staggered effect
+    gsap.delayedCall(index * 0.2, () => {
+      const phraseElement = document.getElementById(highlight.id);
+      const bucket = document.getElementById(`bucket-${highlight.category}`);
+      
+      console.log(`Animating highlight ${highlight.id}:`, {
+        phraseElement: !!phraseElement,
+        bucket: !!bucket,
+        category: highlight.category
+      });
+      
+      if (!phraseElement || !bucket) {
+        console.log('Missing elements for animation:', {
+          phraseElement: !!phraseElement,
+          bucket: !!bucket,
+          highlightId: highlight.id,
+          bucketId: `bucket-${highlight.category}`
+        });
+        
+        // Count this as completed even if failed
+        completedAnimations++;
+        if (completedAnimations === totalAnimations && onComplete) {
+          onComplete();
+        }
+        return;
+      }
+      
+      // Get positions
+      const phraseRect = phraseElement.getBoundingClientRect();
+      const bucketRect = bucket.getBoundingClientRect();
+      
+      // Create clone for animation
+      const clone = phraseElement.cloneNode(true);
+      clone.id = `${highlight.id}-clone`;
+      clone.style.position = 'fixed';
+      clone.style.left = phraseRect.left + 'px';
+      clone.style.top = phraseRect.top + 'px';
+      clone.style.width = phraseRect.width + 'px';
+      clone.style.height = phraseRect.height + 'px';
+      clone.style.zIndex = '1000';
+      clone.style.pointerEvents = 'none';
+      clone.style.background = 'radial-gradient(ellipse at 30% 40%, rgba(218, 165, 32, 0.4) 0%, transparent 60%), linear-gradient(135deg, rgba(240, 230, 140, 0.3) 0%, rgba(218, 165, 32, 0.25) 100%)';
+      clone.style.borderRadius = '3px';
+      clone.style.padding = '2px';
+      
+      document.body.appendChild(clone);
+      
+      // Light up the target bucket
+      bucket.classList.add('receiving');
+      
+      // Animate clone to bucket
+      gsap.to(clone, {
+        x: bucketRect.left + bucketRect.width/2 - phraseRect.left - phraseRect.width/2,
+        y: bucketRect.top + bucketRect.height/2 - phraseRect.top - phraseRect.height/2,
+        scale: 0.3,
+        opacity: 0,
+        duration: 1.2,
+        ease: "power2.out",
+        onComplete: () => {
+          // Clean up clone
+          document.body.removeChild(clone);
+          bucket.classList.remove('receiving');
+          
+          // Track completion
+          completedAnimations++;
+          if (completedAnimations === totalAnimations && onComplete) {
+            console.log('All animations completed, calling onComplete callback');
+            onComplete();
+          }
+        }
+      });
+      
+      // Fade original phrase highlight gradually
+      gsap.to(phraseElement, {
+        opacity: 0.7,
+        duration: 0.5,
+        delay: 0.3,
+        onComplete: () => {
+          // Remove highlight completely after a delay
+          gsap.delayedCall(1.5, () => {
+            if (phraseElement && phraseElement.parentNode) {
+              // Replace highlighted span with plain text
+              const textContent = phraseElement.textContent;
+              const textNode = document.createTextNode(textContent);
+              phraseElement.parentNode.replaceChild(textNode, phraseElement);
+            }
+          });
+        }
+      });
+    });
+  });
+}
+
+function initializeGlobalCounts() {
+  // Initialize global counters for all categories
+  if (categories && Object.keys(categories).length > 0) {
+    Object.keys(categories).forEach(categoryName => {
+      if (!(categoryName in globalCategoryCounts)) {
+        globalCategoryCounts[categoryName] = 0;
+      }
+    });
+  }
+}
+
+function incrementCategoryCounts(selectedCategories, foundCategories) {
+  // Increment global counters based on new matches
+  const newCounts = {};
+  
+  // Count selected categories
+  selectedCategories.forEach(match => {
+    newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+  });
+  
+  // Add found categories
+  foundCategories.forEach(match => {
+    newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+  });
+  
+  // Add to global counters
+  Object.entries(newCounts).forEach(([category, count]) => {
+    globalCategoryCounts[category] = (globalCategoryCounts[category] || 0) + count;
+  });
+  
+  console.log('Updated global category counts:', globalCategoryCounts);
+}
+
+function updateCategoryCountsDisplay() {
+  // Update the UI to show current global counters
+  Object.entries(globalCategoryCounts).forEach(([category, count]) => {
+    const countElement = document.getElementById(`count-${category}`);
+    if (countElement) {
+      countElement.textContent = count.toString();
+    }
+  });
+}
+
+function reorderCategoryBuckets() {
+  const bucketContainer = document.getElementById('categoryBuckets');
+  if (!bucketContainer) return;
+  
+  // Get all bucket elements
+  const buckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
+  
+  // Sort buckets by their count (highest first), then alphabetically by name for ties
+  buckets.sort((a, b) => {
+    const categoryA = a.id.replace('bucket-', '');
+    const categoryB = b.id.replace('bucket-', '');
+    
+    const countA = globalCategoryCounts[categoryA] || 0;
+    const countB = globalCategoryCounts[categoryB] || 0;
+    
+    // Primary sort: by count (descending)
+    if (countB !== countA) {
+      return countB - countA;
+    }
+    
+    // Secondary sort: alphabetically (ascending) for ties
+    return categoryA.localeCompare(categoryB);
+  });
+  
+  // Animate the reordering
+  buckets.forEach((bucket, newIndex) => {
+    // Get current position
+    const currentRect = bucket.getBoundingClientRect();
+    
+    // Move bucket to new position in DOM
+    bucketContainer.appendChild(bucket);
+    
+    // Get new position after DOM reorder
+    const newRect = bucket.getBoundingClientRect();
+    
+    // Calculate the difference
+    const deltaX = currentRect.left - newRect.left;
+    const deltaY = currentRect.top - newRect.top;
+    
+    // Apply initial transform to make it appear in the old position
+    gsap.set(bucket, {
+      x: deltaX,
+      y: deltaY
+    });
+    
+    // Animate to the new position
+    gsap.to(bucket, {
+      x: 0,
+      y: 0,
+      duration: 0.6,
+      ease: "power2.out",
+      delay: newIndex * 0.05 // Small stagger for visual appeal
+    });
+  });
+  
+  console.log('Category buckets reordered by count:', 
+    buckets.map(b => {
+      const category = b.id.replace('bucket-', '');
+      return `${category}: ${globalCategoryCounts[category] || 0}`;
+    })
+  );
+}
+
+function activateCategoryBuckets(selectedCategories, foundCategories) {
   // Activate buckets for selected text categories
   selectedCategories.forEach(match => {
     const bucket = document.getElementById(`bucket-${match.category}`);
     if (bucket) {
       bucket.classList.add('active');
-      bucket.title = `Selected: ${match.phrases.join(', ')}`;
     }
   });
   
-  // Also activate buckets for found text categories (with different styling if desired)
+  // Activate buckets for found text categories
   foundCategories.forEach(match => {
     const bucket = document.getElementById(`bucket-${match.category}`);
     if (bucket) {
       bucket.classList.add('active');
+    }
+  });
+}
+
+function updateCategoryBuckets(selectedCategories, foundCategories) {
+  // Reset all buckets to inactive
+  const allBuckets = document.querySelectorAll('.categoryBucket');
+  allBuckets.forEach(bucket => {
+    bucket.classList.remove('active', 'receiving');
+    bucket.title = ''; // Clear tooltip
+  });
+  
+  // Increment global counters but don't update display yet
+  incrementCategoryCounts(selectedCategories, foundCategories);
+  
+  // Set tooltips but don't activate buckets yet (wait for animation to complete)
+  selectedCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      bucket.title = `Selected: ${match.phrases.join(', ')}`;
+    }
+  });
+  
+  // Set tooltips for found text categories but don't activate yet
+  foundCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
       // Add to existing tooltip or create new one
       const existingTitle = bucket.title;
       if (existingTitle) {
@@ -207,6 +531,62 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
       }
     }
   });
+  
+  // Debug logging
+  console.log('updateCategoryBuckets called with selectedCategories:', selectedCategories, 'foundCategories:', foundCategories);
+  
+  // Check if we have any matches at all
+  const hasAnyMatches = selectedCategories.length > 0 || foundCategories.length > 0;
+  
+  // Trigger word-to-bucket animation for found categories after main text animation completes
+  if (foundCategories.length > 0) {
+    console.log('Found categories exist, setting up animation');
+    
+    // Store categories for use in animation callback
+    const categoriesForCallback = { selectedCategories, foundCategories };
+    
+    gsap.delayedCall(2, () => {  // Wait longer for main text animation to complete
+      const textElement = document.getElementById('text');
+      const currentText = textElement.textContent || textElement.innerText;
+      console.log('Current text for animation:', currentText);
+      
+      const { highlightedText, highlights } = highlightPhrasesInText(currentText, foundCategories);
+      console.log('Highlights found:', highlights);
+      
+      if (highlights.length > 0) {
+        // Temporarily update text with highlights
+        textElement.innerHTML = highlightedText;
+        
+        // Start animation after highlights are in place
+        gsap.delayedCall(0.3, () => {
+          console.log('Starting phrase animation');
+          animatePhrasesToBuckets(highlights, () => {
+            // Update counters and activate buckets after all animations complete
+            console.log('Animation complete, updating counter display and activating buckets');
+            updateCategoryCountsDisplay();
+            activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
+            
+            // Reorder buckets based on updated counts after a short delay
+            gsap.delayedCall(0.5, () => {
+              reorderCategoryBuckets();
+            });
+          });
+        });
+      }
+    });
+  } 
+  
+  // Ensure buckets are properly reset if no matches at all
+  if (!hasAnyMatches) {
+    console.log('No matches found at all, ensuring all buckets remain inactive');
+    gsap.delayedCall(2, () => {
+      const allBuckets = document.querySelectorAll('.categoryBucket');
+      allBuckets.forEach(bucket => {
+        bucket.classList.remove('active', 'receiving');
+        bucket.title = ''; // Clear any lingering tooltips
+      });
+    });
+  }
 }
 
 function resetHighlight(element, selectedText) {
@@ -225,7 +605,7 @@ function animateTextChange(element, selectedText, newText) {
   console.log('similarity score', score, currentResult);
 
   // First fade out the current text
-  gsap.to(element, {
+    gsap.to(element, {
     opacity: 0,
     duration: 0.3,
     ease: "power2.out",
@@ -235,13 +615,13 @@ function animateTextChange(element, selectedText, newText) {
       element.innerHTML = '';
       
       words.forEach((word, index) => {
-        const span = document.createElement('span');
-        span.textContent = word;
-        span.className = 'word';
+      const span = document.createElement('span');
+      span.textContent = word;
+      span.className = 'word';
         span.style.display = 'inline-block';
         span.style.opacity = '0';
         span.style.transform = `translateY(${randomY(-30, 30)}px)`;
-        element.appendChild(span);
+      element.appendChild(span);
         
         // Add space after each word except the last one
         if (index < words.length - 1) {
@@ -424,6 +804,10 @@ async function initialize() {
       
       // Create category buckets after data is loaded
       createCategoryBuckets();
+      
+      // Initialize global category counters
+      initializeGlobalCounts();
+      updateCategoryCountsDisplay();
 
       hideLoading(); // Hide loading after initialization is complete
 
@@ -443,8 +827,56 @@ try {
   // Create the index when the page loads
   await initialize();
   const textElement = document.getElementById('text');
+  
+  // Help modal functionality
+  const helpButton = document.getElementById('helpButton');
+  const helpModal = document.getElementById('helpModal');
+  const closeButton = helpModal.querySelector('.close');
+  
+  // Show help modal
+  helpButton.addEventListener('click', () => {
+    helpModal.classList.remove('hidden');
+  });
+  
+  // Hide help modal when clicking close button
+  closeButton.addEventListener('click', () => {
+    helpModal.classList.add('hidden');
+  });
+  
+  // Hide help modal when clicking outside the modal content
+  helpModal.addEventListener('click', (e) => {
+    if (e.target === helpModal) {
+      helpModal.classList.add('hidden');
+    }
+  });
+  
+  // Hide help modal with Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !helpModal.classList.contains('hidden')) {
+      helpModal.classList.add('hidden');
+    }
+  });
 
+  // Desktop selection
   textElement.addEventListener('mouseup', () => highlightText(textElement));
+  
+  // Mobile selection support
+  textElement.addEventListener('touchend', () => {
+    // Small delay to allow selection to complete on mobile
+    setTimeout(() => highlightText(textElement), 100);
+  });
+  
+  // Additional mobile selection event
+  textElement.addEventListener('selectionchange', () => {
+    // Only trigger if this element is the target
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (textElement.contains(range.commonAncestorContainer)) {
+        setTimeout(() => highlightText(textElement), 50);
+      }
+    }
+  });
 
 } catch (error) {
   console.error('Failed to initialize document:', error);
