@@ -1,24 +1,26 @@
 import { initializeModel, getEmbedding, EmbeddingIndex } from 'client-vector-search';
-import { EfficientNetForImageClassification, env } from '@xenova/transformers';
+import { env } from '@xenova/transformers';
 import { gsap } from 'gsap';
 import SplitType from 'split-type';
 // import gsap text plugin
 import { TextPlugin } from 'gsap/TextPlugin';
 gsap.registerPlugin(TextPlugin);
-import './effects.js';
+import { randomY, showAnimationHideText, formattedContent, showTextHideAnimation } from './effects.js';
 
 
 env.localModelPath = './site-data/cache';
 
 let index;
 let data = [];
-let metadata = [];
-let labelCenters = [];
-let umapLabelData = [];
+let allData = [];
+let categories = [];
 let currentResult = { 
   "id":"PG10089_2",
   "text":"When we re-tell the old tales of our ancestors, we sit beside them over the peat-fire; and, as we glory with them in their strong heroes, and share their elemental joys and fears, we breathe the palpitating air of that old mysterious world of theirs, peopled by spirits beautiful, and strange, and awe-inspiring.",
-  "book":"Elves and Heroes by Donald MacKenzie"
+  "book":"Elves and Heroes",
+  "author":"Donald MacKenzie",
+  "story_title": "",
+  "score": .99
 };
 
 let alreadySeen = [];
@@ -47,48 +49,16 @@ async function createIndex() {
 }
 
 async function loadFiles() {
-  const response1 = await fetch('site-data/author_noun_files.json');
-  const fileList = await response1.json();
-  const response2 = await fetch('site-data/metadata.json');
-  const response3 = await fetch('site-data/labelcenters.json');
-  const response4 = await fetch('site-data/umap_authortales3.json');  // has the x, y coords, not using now
-  metadata = await response2.json();
-  labelCenters = await response3.json();
-  const umapData = await response4.json();
-  umapLabelData = umapData.reduce((acc, item) => {
-    acc[item.id] = {
-      label: item.label,
-      x: item.x,
-      y: item.y,
-      text: item.text,
-      book: item.book,
-      id: item.id,
-      cluster: item.cluster.toString(),
-      ignore: item.ignore
-    };
-    return acc;
-  }, {});
-
-  scores = labelCenters.reduce((acc, item) => {
-    item['seen'] = 0;
-    acc[item.cluster.toString()] = item;
-    return acc;
-  }, {});
-
-  for (const file of fileList) {
-    try {
-      const response = await fetch("site-data/output-noun-author-embeds/" + file);
-      const inputData = await response.json();
-      for (const item of inputData) {
-        if (typeof item.embedding === 'object') {
-          data.push(item);
-        }
-      }
-    } catch (error) {
-      //console.error('Error reading file:', file, error);
-      continue;
+  const response = await fetch('site-data/small_merged_data_embeds_metadata.json');
+  categories = await fetch('site-data/category-words.json');
+  allData = await response.json();
+  categories = await categories.json();
+  for (const item of allData) {
+    if (item.embedding) {
+      data.push(item); // all the data goes into it as the 'object'
     }
   }
+  
 }
 
 
@@ -103,9 +73,6 @@ function filterResults(results, selectedText) {
       && result['object']['text'] !== currentResult['text']
     ) {
       chosen = result;
-     // chosen['object']['x'] = umapLabelData[chosen['object']['id']]['x'];
-     // chosen['object']['y'] = umapLabelData[chosen['object']['id']]['y'];
-      chosen['object']['label'] = umapLabelData[chosen['object']['id']]['label'];
       console.log("chosen", chosen);
       break;
     }
@@ -129,30 +96,117 @@ async function findRelatedText(selectedText) {
   alreadySeen.push(chosen['object']);
 
   const text = chosen['object']['text'];
-  const book_id = chosen['object']['book'];
-  const label = chosen['object']['label'];
-  const cluster = umapLabelData[chosen['object']['id']]['cluster'].toString();
+  const book_id = chosen['object']['book_id'];
   const score = chosen['similarity'];
-  // update scores in scores -- in case of counting them for any game purposes
-  if (cluster && cluster !== 'ignore') {
-    console.log(scores[cluster]);
-    scores[cluster]['seen'] += 1;
-  }
 
-  const author = metadata[book_id]['author'];
-  const title = metadata[book_id]['title'];
-  const birth = metadata[book_id]['birth'];
+  const author = chosen['object']['author'];
+  const title = chosen['object']['title'];
+  const story_title = chosen['object']['storytitle'];
+  const birth = chosen['object']['birth'];
+
+  // Get categories for both selected text and found text
+  const selectedCategories = getCategory(selectedText);
+  const foundCategories = getCategory(text);
+
+  console.log('Selected text categories:', selectedCategories);
+  console.log('Found text categories:', foundCategories);
 
   return { text: text, 
     id: book_id, 
     author: author, 
     title: title, 
     birth: birth, 
-    label: label,
-    cluster: cluster,
-    //x: chosen['object']['x'],
-    //y: chosen['object']['y'],
-    score: score };
+    story_title: story_title,
+    score: score,
+    selectedCategories: selectedCategories,
+    foundCategories: foundCategories };
+}
+
+
+function getCategory(text) {
+  const matches = [];
+  const textLower = text.toLowerCase();
+  
+  // Search through each category
+  for (const [categoryName, phrases] of Object.entries(categories)) {
+    const matchedPhrases = [];
+    
+    // Check each phrase in the category
+    for (const phrase of phrases) {
+      if (textLower.includes(phrase.toLowerCase())) {
+        matchedPhrases.push(phrase);
+      }
+    }
+    
+    // If we found matches in this category, add them to results
+    if (matchedPhrases.length > 0) {
+      matches.push({
+        category: categoryName,
+        phrases: matchedPhrases
+      });
+    }
+  }
+  
+  return matches;
+}
+
+function createCategoryBuckets() {
+  const bucketContainer = document.getElementById('categoryBuckets');
+  bucketContainer.innerHTML = ''; // Clear existing buckets
+  
+  // Get all category names from the loaded categories data
+  const categoryNames = Object.keys(categories);
+  
+  categoryNames.forEach(categoryName => {
+    const bucketDiv = document.createElement('div');
+    bucketDiv.className = 'categoryBucket';
+    bucketDiv.id = `bucket-${categoryName}`;
+    
+    const img = document.createElement('img');
+    img.src = 'images/bucket.jpeg';
+    img.alt = categoryName;
+    
+    const label = document.createElement('div');
+    label.className = 'categoryLabel';
+    label.textContent = categoryName;
+    
+    bucketDiv.appendChild(img);
+    bucketDiv.appendChild(label);
+    bucketContainer.appendChild(bucketDiv);
+  });
+}
+
+function updateCategoryBuckets(selectedCategories, foundCategories) {
+  // Reset all buckets to inactive
+  const allBuckets = document.querySelectorAll('.categoryBucket');
+  allBuckets.forEach(bucket => {
+    bucket.classList.remove('active');
+    bucket.title = ''; // Clear tooltip
+  });
+  
+  // Activate buckets for selected text categories
+  selectedCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      bucket.classList.add('active');
+      bucket.title = `Selected: ${match.phrases.join(', ')}`;
+    }
+  });
+  
+  // Also activate buckets for found text categories (with different styling if desired)
+  foundCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      bucket.classList.add('active');
+      // Add to existing tooltip or create new one
+      const existingTitle = bucket.title;
+      if (existingTitle) {
+        bucket.title = `${existingTitle} | Found: ${match.phrases.join(', ')}`;
+      } else {
+        bucket.title = `Found: ${match.phrases.join(', ')}`;
+      }
+    }
+  });
 }
 
 function resetHighlight(element, selectedText) {
@@ -168,71 +222,96 @@ function animateTextChange(element, selectedText, newText) {
   resetHighlight(element, selectedText);
 
   const score = currentResult['similarity'];
-
   console.log('similarity score', score, currentResult);
-  // Animate the text change
-  if (score > 0.8) {
 
-    console.log('high score', score);
-    gsap.to(element, {
-      duration: 1,
-      text: {
-        value: newText,
-        delimiter: " "
-      },
-      ease: "power2.inOut"
-      });
-  
-  } else {
-    console.log('in else');
-    const words = newText.split(' ');``
-
-    element.innerHTML = '';
-    words.forEach(word => {
-      const span = document.createElement('span');
-      span.textContent = word;
-      span.className = 'word';
-      element.appendChild(span);
-    });
-
-    gsap.fromTo(
-      '.word',
-      { 
-        y: randomY(-20, 20),
-        opacity: 0
-      },
-      {
-        y: 0,
-        opacity: 1,
-        duration: 1,
-        ease: 'power4.out',
-        onComplete: () => {
-          console.log('in onComplete');
-          const text = document.getElementById('text');
-          text.innerHTML = formattedContent(newText);
+  // First fade out the current text
+  gsap.to(element, {
+    opacity: 0,
+    duration: 0.3,
+    ease: "power2.out",
+    onComplete: () => {
+      // Split the new text into words and create spans with spaces
+      const words = newText.split(' ');
+      element.innerHTML = '';
+      
+      words.forEach((word, index) => {
+        const span = document.createElement('span');
+        span.textContent = word;
+        span.className = 'word';
+        span.style.display = 'inline-block';
+        span.style.opacity = '0';
+        span.style.transform = `translateY(${randomY(-30, 30)}px)`;
+        element.appendChild(span);
+        
+        // Add space after each word except the last one
+        if (index < words.length - 1) {
+          element.appendChild(document.createTextNode(' '));
         }
-      }
-    );
+      });
 
-  }
+      // Fade the container back in
+      gsap.to(element, {
+        opacity: 1,
+        duration: 0.2,
+        onComplete: () => {
+          // Animate each word into place
+          gsap.to('.word', {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            ease: 'back.out(1.7)',
+            stagger: {
+              amount: 0.6,
+              from: 'random'
+            },
+            onComplete: () => {
+              // Replace with formatted content after animation
+              element.innerHTML = formattedContent(newText);
+            }
+          });
+        }
+      });
+    }
+  });
 }
 
+
+function updateBackgroundForScore(score) {
+  // Map the actual score range (0.6 to 0.99) to the full color spectrum (0 to 1)
+  const minScore = 0.65;
+  const maxScore = 0.9;
+  
+  // Clamp score to the expected range
+  const clampedScore = Math.max(minScore, Math.min(maxScore, score));
+  
+  // Normalize to 0-1 range based on actual score distribution
+  const normalizedScore = (clampedScore - minScore) / (maxScore - minScore);
+  
+  // Create a color that transitions from blue (low score ~0.6) to rose (high score ~0.99)
+  // Low scores (0.6): more blue-ish (#e8f0f8 - light blue)
+  // High scores (0.99): more rose-ish (#f8e8f0 - light rose)
+  
+  const redComponent = Math.floor(232 + (248 - 232) * normalizedScore);   // 232 -> 248 (more red for higher scores)
+  const greenComponent = Math.floor(240 - (240 - 232) * normalizedScore); // 240 -> 232 (less green for higher scores)
+  const blueComponent = Math.floor(248 - (248 - 240) * normalizedScore);  // 248 -> 240 (less blue for higher scores)
+  
+  const backgroundColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
+  
+  console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Color: ${backgroundColor}`);
+  
+  // Update the CSS variable
+  document.documentElement.style.setProperty('--score-bg-color', backgroundColor);
+}
 
 function replaceRelatedInfo(relatedItemObject) {
 
   const relatedIdElement = document.getElementById('relatedId');
   const relatedAuthorElement = document.getElementById('relatedAuthor');
   const relatedTitleElement = document.getElementById('relatedTitle');
+  const relatedStoryTitleElement = document.getElementById('relatedStoryTitle');
   //const relatedBirthElement = document.getElementById('relatedBirth');
   const relatedScoreElement = document.getElementById('relatedScore');
 
-  /*
-  if (relatedItemObject.birth === "None") {
-    relatedBirthElement.textContent = "(No birth date)";
-  } else {
-    relatedBirthElement.textContent = "(" + relatedItemObject.birth.toString() + ")";
-  }
-  */
 
   if (relatedItemObject.author === "None") {
     relatedAuthorElement.textContent = "No author found";
@@ -242,7 +321,17 @@ function replaceRelatedInfo(relatedItemObject) {
 
   relatedIdElement.textContent = relatedItemObject.id;  // book_id
   relatedTitleElement.textContent = relatedItemObject.title;
+  
+  if (relatedItemObject.story_title === "None" || !relatedItemObject.story_title) {
+    relatedStoryTitleElement.textContent = "";
+  } else {
+    relatedStoryTitleElement.textContent = '"' + relatedItemObject.story_title + '"';
+  }
+  
   relatedScoreElement.textContent = "Score: " + relatedItemObject.score.toFixed(2).toString();
+  
+  // Update background color based on score
+  updateBackgroundForScore(relatedItemObject.score);
 } 
 
 
@@ -296,8 +385,7 @@ function highlightText(textElement) {
           if (relatedItemObject) {
             animateTextChange(textElement, selectedText, relatedItemObject.text);
             replaceRelatedInfo(relatedItemObject);
-            const clusterScore = scores[relatedItemObject['cluster'].toString()];
-            console.log('clusterScore here', clusterScore);
+            updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
           } else {
             animateTextChange(textElement, selectedText, "Error, No text found.");
           }
@@ -330,9 +418,12 @@ async function initialize() {
   try {
       showLoading(); // Show loading before starting initialization
 
-      await initializeModel("Xenova/gte-small");
+      await initializeModel("TaylorAI/bge-micro");
       await loadFiles();
       index = await createIndex();
+      
+      // Create category buckets after data is loaded
+      createCategoryBuckets();
 
       hideLoading(); // Hide loading after initialization is complete
 

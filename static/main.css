@@ -1,9 +1,14 @@
+:root {
+    --score-bg-color: #f0f0f0; /* Default background color */
+}
+
 body {
     font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
     margin: auto;
     margin: 0;
     padding: 0;
-    background-color: #f0f0f0;
+    background-color: var(--score-bg-color);
+    transition: background-color 1s ease-in-out;
 }
 
 #container {
@@ -49,6 +54,51 @@ body {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
+}
+
+#categoryContainer {
+    width: 100%;
+    max-width: 650px;
+    margin-bottom: 20px;
+}
+
+#categoryBuckets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    padding: 10px;
+}
+
+.categoryBucket {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    opacity: 0.3;
+    transition: opacity 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+}
+
+.categoryBucket.active {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.categoryBucket img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    margin-bottom: 5px;
+}
+
+.categoryLabel {
+    font-size: 10px;
+    text-align: center;
+    color: #666;
+    font-weight: bold;
+    text-transform: capitalize;
+    max-width: 60px;
+    word-wrap: break-word;
 }
 
 #text {

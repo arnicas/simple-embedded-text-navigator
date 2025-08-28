@@ -1,5 +1,5 @@
 
-function randomY(x, y) {
+export function randomY(x, y) {
     return Math.floor(Math.random() * (y - x + 1)) + x;
   }
   
@@ -48,7 +48,7 @@ function sanitize(string) {
     return string;
   }
   
-  function formattedContent(newText) {
+export function formattedContent(newText) {
     // Sanitize the input
     let safeText = sanitize(newText);
     
