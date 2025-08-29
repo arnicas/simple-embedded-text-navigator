@@ -14,23 +14,41 @@ let index;
 let data = [];
 let allData = [];
 let categories = [];
-let currentResult = { 
-  "id":"PG10089_2",
-  "text":"When we re-tell the old tales of our ancestors, we sit beside them over the peat-fire; and, as we glory with them in their strong heroes, and share their elemental joys and fears, we breathe the palpitating air of that old mysterious world of theirs, peopled by spirits beautiful, and strange, and awe-inspiring.",
-  "book":"Elves and Heroes",
-  "author":"Donald MacKenzie",
-  "story_title": "",
-  "score": .99
-};
+let word_scores = {};
+let currentResult = null; // Will be set to random quote on initialization
 
 let alreadySeen = [];
 let scores = {};
 
 // Global category counters that persist across sessions
 let globalCategoryCounts = {};
+let globalCategoryScores = {};
 
 // Global category matched phrases that persist across sessions
 let globalCategoryMatches = {};
+
+// Metadata tracking (authors, books, stories) - count only
+let globalMetadataCounts = {
+  'authors': 0,
+  'books': 0, 
+  'stories': 0
+};
+
+// Total tracking across all categories
+let totalScore = 0;
+let totalItemsFound = 0;
+
+// Track unique metadata items
+let uniqueAuthors = new Set();
+let uniqueBooks = new Set();
+let uniqueStories = new Set();
+
+// Total counts available in dataset
+let totalMetadataCounts = {
+  'authors': 0,
+  'books': 0,
+  'stories': 0
+};
 
 
 
@@ -59,14 +77,151 @@ async function createIndex() {
 async function loadFiles() {
   const response = await fetch('site-data/small_merged_data_embeds_metadata.json');
   categories = await fetch('site-data/category-words.json');
+  word_scores = await fetch('site-data/scores_lookup.json');
   allData = await response.json();
   categories = await categories.json();
+  word_scores = await word_scores.json();
+  
+  console.log('Loaded word_scores:', Object.keys(word_scores).length, 'words');
+  console.log('Sample word scores:', Object.entries(word_scores).slice(0, 5));
+  
   for (const item of allData) {
     if (item.embedding) {
       data.push(item); // all the data goes into it as the 'object'
     }
   }
   
+  // Count unique metadata in the dataset
+  countDatasetMetadata();
+  
+}
+
+function countDatasetMetadata() {
+  const datasetAuthors = new Set();
+  const datasetBooks = new Set();
+  const datasetStories = new Set();
+  
+  console.log('Analyzing dataset metadata from', allData.length, 'items...');
+  
+  allData.forEach(item => {
+    // Count unique authors
+    if (item.author && item.author !== "None" && item.author.trim() !== "") {
+      datasetAuthors.add(item.author.trim());
+    }
+    
+    // Count unique books (using title field)
+    if (item.title && item.title.trim() !== "") {
+      datasetBooks.add(item.title.trim());
+    }
+    
+    // Count unique stories
+    if (item.storytitle && item.storytitle !== "None" && item.storytitle.trim() !== "") {
+      datasetStories.add(item.storytitle.trim());
+    }
+  });
+  
+  // Update total counts
+  totalMetadataCounts.authors = datasetAuthors.size;
+  totalMetadataCounts.books = datasetBooks.size;
+  totalMetadataCounts.stories = datasetStories.size;
+  
+  console.log('Dataset metadata counts:');
+  console.log(`- Authors: ${totalMetadataCounts.authors} unique`);
+  console.log(`- Books: ${totalMetadataCounts.books} unique`);
+  console.log(`- Stories: ${totalMetadataCounts.stories} unique`);
+  
+  // Log some examples
+  console.log('Sample authors:', Array.from(datasetAuthors).slice(0, 5));
+  console.log('Sample books:', Array.from(datasetBooks).slice(0, 5));
+  console.log('Sample stories:', Array.from(datasetStories).slice(0, 5));
+  
+  return totalMetadataCounts;
+}
+
+function setRandomStartingQuote() {
+  // Select a random quote from the loaded data
+  if (data.length === 0) {
+    console.error('No data available for random quote selection');
+    return;
+  }
+  
+  const randomIndex = Math.floor(Math.random() * data.length);
+  const randomItem = data[randomIndex];
+  
+  console.log('Selected random starting quote:', randomItem);
+  
+  // Analyze the starting text for categories and scores
+  const foundCategories = getCategory(randomItem.text);
+  console.log('Starting text categories found:', foundCategories);
+  
+  // Set as current result
+  currentResult = {
+    id: randomItem.book,
+    text: randomItem.text,
+    author: randomItem.author,
+    title: randomItem.title,
+    story_title: randomItem.storytitle || "",
+    score: 1.0, // Default score for starting quote
+    selectedCategories: [], // No selected text for starting quote
+    foundCategories: foundCategories
+  };
+  
+  // Update the display with the random quote
+  const textElement = document.getElementById('text');
+  if (textElement) {
+    textElement.innerHTML = formattedContent(randomItem.text);
+  }
+  
+  // Update the source information
+  replaceRelatedInfo(currentResult);
+  
+  // Process the initial categories and update scores
+  if (foundCategories.length > 0) {
+    console.log('Processing initial categories for scoring');
+    incrementCategoryCounts([], foundCategories); // No selected categories, only found
+    updateCategoryCountsDisplay();
+    activateCategoryBuckets([], foundCategories);
+    
+    // Reorder buckets based on initial scores
+    gsap.delayedCall(0.5, () => {
+      reorderCategoryBuckets();
+    });
+  }
+  
+  console.log('Set random starting quote from:', randomItem.author, '-', randomItem.title);
+}
+
+function getDatasetMetadataCounts() {
+  // Helper function to get total counts available in dataset
+  return {
+    authors: totalMetadataCounts.authors,
+    books: totalMetadataCounts.books,
+    stories: totalMetadataCounts.stories,
+    total: totalMetadataCounts.authors + totalMetadataCounts.books + totalMetadataCounts.stories
+  };
+}
+
+function getDiscoveredMetadataCounts() {
+  // Helper function to get discovered counts
+  return {
+    authors: globalMetadataCounts.authors,
+    books: globalMetadataCounts.books,
+    stories: globalMetadataCounts.stories,
+    total: globalMetadataCounts.authors + globalMetadataCounts.books + globalMetadataCounts.stories
+  };
+}
+
+function getMetadataProgress() {
+  // Helper function to get progress percentages
+  const discovered = getDiscoveredMetadataCounts();
+  const total = getDatasetMetadataCounts();
+  
+  return {
+    authors: total.authors > 0 ? Math.round((discovered.authors / total.authors) * 100) : 0,
+    books: total.books > 0 ? Math.round((discovered.books / total.books) * 100) : 0,
+    stories: total.stories > 0 ? Math.round((discovered.stories / total.stories) * 100) : 0,
+    overall: total.total > 0 ? Math.round((discovered.total / total.total) * 100) : 0
+  };
 }
 
 
@@ -177,6 +332,16 @@ function filterOverlappingPhrases(phrases, text) {
   return filteredPhrases;
 }
 
+
+// if we want a separate function for search
+function searchJs(textLine, searchString) {
+  if (!searchString) return false;
+  const escapedSearchString = searchString.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regexPattern = new RegExp('\\b' + escapedSearchString + '\\b', 'i'); // 'i' for case-insensitive
+  return regexPattern.test(textLine);
+}
+// Example: searchJs("The quick brown fox.", "fox") -> true
+
 function getCategory(text) {
   const matches = [];
   const textLower = text.toLowerCase();
@@ -198,15 +363,95 @@ function getCategory(text) {
       const filteredPhrases = filterOverlappingPhrases(matchedPhrases, textLower);
       
       if (filteredPhrases.length > 0) {
+        // Calculate total score for this category
+        const categoryScore = calculateCategoryScore(filteredPhrases);
+        
         matches.push({
           category: categoryName,
-          phrases: filteredPhrases
+          phrases: filteredPhrases,
+          score: categoryScore
         });
       }
     }
   }
   
   return matches;
+}
+
+function calculateCategoryScore(phrases) {
+  let totalScore = 0;
+  
+  phrases.forEach(phrase => {
+    // Split phrase into individual words and sum their scores
+    const words = phrase.toLowerCase().split(/\s+/);
+    words.forEach(word => {
+      // Look up word score, default to 0 if not found
+      const wordScore = word_scores[word] || 0;
+      totalScore += wordScore;
+    });
+  });
+  
+  console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
+  return totalScore;
+}
+
+function getWordScoreDisplay(phrase) {
+  // Split phrase into words and calculate total score
+  const words = phrase.toLowerCase().split(/\s+/);
+  let totalScore = 0;
+  
+  words.forEach(word => {
+    const score = word_scores[word] || 0;
+    totalScore += score;
+  });
+  
+  // Show phrase with total score instead of individual word scores
+  return { display: `${phrase} (${totalScore} pts)`, totalScore };
+}
+
+function createMetadataBuckets() {
+  const metadataContainer = document.getElementById('metadataBuckets');
+  metadataContainer.innerHTML = ''; // Clear existing buckets
+  
+  const metadataTypes = ['authors', 'books', 'stories', 'total'];
+  
+  metadataTypes.forEach(metadataType => {
+    const bucketDiv = document.createElement('div');
+    bucketDiv.className = 'metadataBucket';
+    bucketDiv.id = `metadata-${metadataType}`;
+    
+    const img = document.createElement('img');
+    img.src = `images/${metadataType}.jpg`;
+    img.alt = metadataType;
+    
+    // Add error handler to fallback to generic bucket image
+    img.onerror = function() {
+      this.src = 'images/bucket.jpeg';
+    };
+    
+    const label = document.createElement('div');
+    label.className = 'metadataLabel';
+    const displayName = metadataType.charAt(0).toUpperCase() + metadataType.slice(1);
+    
+    if (metadataType === 'total') {
+      label.innerHTML = `${displayName}<br><span class="total-score-display" id="metadata-count-${metadataType}">0 pts</span>`;
+    } else {
+      label.innerHTML = `${displayName}<br><span class="metadata-count" id="metadata-count-${metadataType}" style="display: none;">0</span>`;
+    }
+    
+    // Add click event listener for modal
+    bucketDiv.addEventListener('click', () => {
+      if (metadataType === 'total') {
+        showTotalModal(img.src);
+      } else {
+        showMetadataModal(metadataType, img.src);
+      }
+    });
+    
+    bucketDiv.appendChild(img);
+    bucketDiv.appendChild(label);
+    metadataContainer.appendChild(bucketDiv);
+  });
 }
 
 function createCategoryBuckets() {
@@ -258,28 +503,32 @@ function showCategoryModal(categoryName, imageSrc) {
   modalImage.alt = categoryName;
   modalImage.style.display = 'block'; // Show the image
   
-  // Set title with count
+  // Set title with count and score
   const count = globalCategoryCounts[categoryName] || 0;
+  const score = globalCategoryScores[categoryName] || 0;
   const capitalizedName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
   if (count > 0) {
-    modalTitle.textContent = `${capitalizedName}: ${count} Found`;
+    modalTitle.textContent = `${capitalizedName}: ${count} Found (${Math.round(score)} Points)`;
     modalCount.style.display = 'none'; // Hide the separate count element
   } else {
     modalTitle.textContent = capitalizedName;
-    modalCount.textContent = `Keep exploring to discover ${categoryName} elements!`;
+    modalCount.textContent = `Keep exploring to discover ${categoryName} elements and earn points!`;
     modalCount.style.display = 'block';
   }
   
-  // Set matched phrases
+  // Set matched phrases with individual word scores
   const matches = globalCategoryMatches[categoryName];
   if (matches && matches.size > 0) {
     const matchesArray = Array.from(matches).sort();
-    modalMatches.innerHTML = `
-      <h3>Words & Phrases You've Found:</h3>
-      <div class="category-matches-list">
-        ${matchesArray.map(phrase => `<span class="match-phrase">${phrase}</span>`).join('')}
-      </div>
-    `;
+        modalMatches.innerHTML = `
+        <p class="scoring-explanation">Common items have fewer points associated with them.</p>
+        <div class="category-matches-list">
+          ${matchesArray.map(phrase => {
+            const scoreInfo = getWordScoreDisplay(phrase);
+            return `<span class="match-phrase">${scoreInfo.display}</span>`;
+          }).join('')}
+        </div>
+      `;
     modalMatches.style.display = 'block';
   } else {
     modalMatches.style.display = 'none';
@@ -292,6 +541,111 @@ function showCategoryModal(categoryName, imageSrc) {
 function hideCategoryModal() {
   const modal = document.getElementById('categoryModal');
   modal.classList.add('hidden');
+}
+
+function showMetadataModal(metadataType, imageSrc) {
+  const modal = document.getElementById('categoryModal');
+  const modalImage = document.getElementById('categoryModalImage');
+  const modalTitle = document.getElementById('categoryModalTitle');
+  const modalCount = document.getElementById('categoryModalCount');
+  const modalMatches = document.getElementById('categoryModalMatches');
+  
+  // Set modal content
+  modalImage.src = imageSrc;
+  modalImage.alt = metadataType;
+  modalImage.style.display = 'block';
+  
+  // Set title with count and progress
+  const discovered = globalMetadataCounts[metadataType] || 0;
+  const total = totalMetadataCounts[metadataType] || 0;
+  const displayName = metadataType.charAt(0).toUpperCase() + metadataType.slice(1);
+  if (discovered > 0) {
+    const percentage = total > 0 ? Math.round((discovered / total) * 100) : 0;
+    modalTitle.textContent = `${displayName}: ${discovered}/${total} Found (${percentage}%)`;
+    modalCount.style.display = 'none';
+  } else {
+    modalTitle.textContent = displayName;
+    modalCount.textContent = `Keep exploring to discover different ${metadataType}! (${total} available)`;
+    modalCount.style.display = 'block';
+  }
+  
+  // Set matched items
+  let uniqueItems = [];
+  if (metadataType === 'authors') {
+    uniqueItems = Array.from(uniqueAuthors);
+  } else if (metadataType === 'books') {
+    uniqueItems = Array.from(uniqueBooks);
+  } else if (metadataType === 'stories') {
+    uniqueItems = Array.from(uniqueStories);
+  }
+  
+  if (uniqueItems.length > 0) {
+    const sortedItems = uniqueItems.sort();
+    modalMatches.innerHTML = `
+      <div class="category-matches-list">
+        ${sortedItems.map(item => `<span class="match-phrase">${item}</span>`).join('')}
+      </div>
+    `;
+    modalMatches.style.display = 'block';
+  } else {
+    modalMatches.style.display = 'none';
+  }
+  
+  // Show modal
+  modal.classList.remove('hidden');
+}
+
+function showTotalModal(imageSrc) {
+  const modal = document.getElementById('categoryModal');
+  const modalImage = document.getElementById('categoryModalImage');
+  const modalTitle = document.getElementById('categoryModalTitle');
+  const modalCount = document.getElementById('categoryModalCount');
+  const modalMatches = document.getElementById('categoryModalMatches');
+  
+  // Set modal content
+  modalImage.src = imageSrc;
+  modalImage.alt = 'total';
+  modalImage.style.display = 'block';
+  
+  // Calculate totals
+  const totalPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
+  const totalItems = Object.values(globalCategoryCounts).reduce((sum, count) => sum + count, 0);
+  const metadataTotal = Object.values(globalMetadataCounts).reduce((sum, count) => sum + count, 0);
+  const grandTotalItems = totalItems + metadataTotal;
+  
+  // Set title
+  modalTitle.textContent = `Total Progress: ${Math.round(totalPoints)} Points`;
+  modalCount.style.display = 'none';
+  
+  // Set content showing breakdown
+  modalMatches.innerHTML = `
+    <div style="text-align: center; font-family: 'Patrick Hand', cursive;">
+      <h3 style="color: #8B4513; margin-bottom: 15px;">Your Exploration Summary</h3>
+      
+      <div style="background: rgba(218, 165, 32, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <p style="font-size: 16px; font-weight: bold; color: #2d1810; margin: 5px 0;">
+          🏆 Total Score: ${Math.round(totalPoints)} Points
+        </p>
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          📊 Category Items: ${totalItems}
+        </p>
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          📚 Unique Text Items: ${metadataTotal}
+        </p>
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          🎯 Total Items Found: ${grandTotalItems}
+        </p>
+      </div>
+      
+      <p style="font-size: 12px; color: #666; font-style: italic;">
+        Keep exploring to discover more quotes and raise your score of unusual texts!
+      </p>
+    </div>
+  `;
+  modalMatches.style.display = 'block';
+  
+  // Show modal
+  modal.classList.remove('hidden');
 }
 
 function highlightPhrasesInText(text, categories) {
@@ -418,13 +772,16 @@ function animatePhrasesToBuckets(highlights, onComplete) {
         duration: 0.5,
         delay: 0.3,
         onComplete: () => {
-          // Remove highlight completely after a delay
+          // Remove highlight completely after a delay with safer cleanup
           gsap.delayedCall(1.5, () => {
-            if (phraseElement && phraseElement.parentNode) {
-              // Replace highlighted span with plain text
-              const textContent = phraseElement.textContent;
-              const textNode = document.createTextNode(textContent);
-              phraseElement.parentNode.replaceChild(textNode, phraseElement);
+            // Get the text element and completely regenerate its content
+            const textElement = document.getElementById('text');
+            if (textElement) {
+              // Get the clean text content without any HTML
+              const cleanText = textElement.textContent || textElement.innerText;
+              // Completely replace with clean formatted content
+              textElement.innerHTML = formattedContent(cleanText);
+             // console.log('Cleaned up text content, removed all HTML markup');
             }
           });
         }
@@ -434,11 +791,14 @@ function animatePhrasesToBuckets(highlights, onComplete) {
 }
 
 function initializeGlobalCounts() {
-  // Initialize global counters and matches for all categories
+  // Initialize global counters, scores and matches for all categories
   if (categories && Object.keys(categories).length > 0) {
     Object.keys(categories).forEach(categoryName => {
       if (!(categoryName in globalCategoryCounts)) {
         globalCategoryCounts[categoryName] = 0;
+      }
+      if (!(categoryName in globalCategoryScores)) {
+        globalCategoryScores[categoryName] = 0;
       }
       if (!(categoryName in globalCategoryMatches)) {
         globalCategoryMatches[categoryName] = new Set(); // Use Set to avoid duplicates
@@ -448,12 +808,14 @@ function initializeGlobalCounts() {
 }
 
 function incrementCategoryCounts(selectedCategories, foundCategories) {
-  // Increment global counters and track matched phrases
+  // Increment global counters and scores, track matched phrases
   const newCounts = {};
+  const newScores = {};
   
-  // Count selected categories and track phrases
+  // Add selected categories counts and scores, track phrases
   selectedCategories.forEach(match => {
     newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+    newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
     // Add phrases to global matches set
     if (!globalCategoryMatches[match.category]) {
       globalCategoryMatches[match.category] = new Set();
@@ -463,9 +825,10 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
     });
   });
   
-  // Add found categories and track phrases
+  // Add found categories counts and scores, track phrases
   foundCategories.forEach(match => {
     newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+    newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
     // Add phrases to global matches set
     if (!globalCategoryMatches[match.category]) {
       globalCategoryMatches[match.category] = new Set();
@@ -475,89 +838,245 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
     });
   });
   
-  // Add to global counters
+  // Add to global counters and scores
   Object.entries(newCounts).forEach(([category, count]) => {
     globalCategoryCounts[category] = (globalCategoryCounts[category] || 0) + count;
   });
+  Object.entries(newScores).forEach(([category, score]) => {
+    globalCategoryScores[category] = (globalCategoryScores[category] || 0) + score;
+  });
   
   console.log('Updated global category counts:', globalCategoryCounts);
+  console.log('Updated global category scores:', globalCategoryScores);
   console.log('Updated global category matches:', globalCategoryMatches);
+  
+  // Trigger score celebration for high-value scores
+  Object.entries(newScores).forEach(([category, score]) => {
+    console.log(`Checking score for ${category}: ${score}`);
+    if (score > 1) {
+      console.log(`Triggering celebration for ${category}: ${score}pts`);
+      showScoreCelebration(Math.round(score));
+    }
+  });
+}
+
+function showScoreCelebration(score) {
+  console.log(`Creating score celebration for ${score} points`);
+  
+  // Create score celebration element
+  const scoreElement = document.createElement('div');
+  scoreElement.className = 'score-celebration';
+  scoreElement.textContent = `+${score}!`;
+  
+  // Add to document
+  document.body.appendChild(scoreElement);
+  
+  // Generate random fly-off direction
+  const directions = [
+    { x: -window.innerWidth, y: -window.innerHeight },  // Top-left
+    { x: window.innerWidth, y: -window.innerHeight },   // Top-right
+    { x: -window.innerWidth, y: window.innerHeight },   // Bottom-left
+    { x: window.innerWidth, y: window.innerHeight },    // Bottom-right
+    { x: 0, y: -window.innerHeight * 1.5 },             // Straight up
+    { x: -window.innerWidth * 1.5, y: 0 },              // Straight left
+    { x: window.innerWidth * 1.5, y: 0 }                // Straight right
+  ];
+  
+  const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+  
+  // GSAP animation sequence
+  const tl = gsap.timeline({
+    onComplete: () => {
+      if (scoreElement && scoreElement.parentNode) {
+        scoreElement.parentNode.removeChild(scoreElement);
+      }
+    }
+  });
+  
+  tl.to(scoreElement, {
+    opacity: 1,
+    scale: 1.5,
+    duration: 0.3,
+    ease: "back.out(1.7)"
+  })
+  .to(scoreElement, {
+    scale: 1.2,
+    duration: 0.2,
+    ease: "power2.out"
+  })
+  .to(scoreElement, {
+    scale: 1.0,
+    duration: 0.3,
+    ease: "power1.out"
+  })
+  .to(scoreElement, {
+    x: randomDirection.x,
+    y: randomDirection.y,
+    opacity: 0,
+    scale: 0.5,
+    duration: 1.2,
+    ease: "power2.in"
+  });
+  
+  console.log(`Score celebration: +${score}pts flying to ${randomDirection.x}, ${randomDirection.y}`);
+}
+
+function cleanupTextContent() {
+  // Safety function to ensure text content is always clean
+  const textElement = document.getElementById('text');
+  const animationElement = document.getElementById('animation');
+  
+  [textElement, animationElement].forEach(element => {
+    if (element && element.innerHTML.includes('<span')) {
+      const cleanText = element.textContent || element.innerText;
+      element.innerHTML = formattedContent(cleanText);
+      console.log('Cleaned up HTML markup from text element');
+    }
+  });
 }
 
 function updateCategoryCountsDisplay() {
-  // Update the UI to show current global counters
-  Object.entries(globalCategoryCounts).forEach(([category, count]) => {
+  // Update the UI to show both count and score
+  console.log('Updating category display - counts:', globalCategoryCounts, 'scores:', globalCategoryScores);
+  Object.keys(globalCategoryCounts).forEach(category => {
+    const count = globalCategoryCounts[category] || 0;
+    const score = globalCategoryScores[category] || 0;
     const countElement = document.getElementById(`count-${category}`);
+   // console.log(`Updating ${category}: count=${count}, score=${score}, element exists=${!!countElement}`);
     if (countElement) {
-      if (count > 0) {
-        countElement.textContent = count.toString();
+      if (count > 0 || score > 0) {
+        const displayText = `${Math.round(score)} (${count})`;
+        countElement.textContent = displayText;
         countElement.style.display = 'inline';
+        console.log(`Set ${category} display to: ${displayText}`);
       } else {
         countElement.style.display = 'none';
       }
     }
   });
+  
+  // Update total display whenever category scores change
+  updateTotalDisplay();
 }
 
+function updateMetadataCountsDisplay() {
+  // Update the UI to show metadata counts with progress
+  console.log('Updating metadata display:', globalMetadataCounts);
+  Object.keys(globalMetadataCounts).forEach(metadataType => {
+    const discovered = globalMetadataCounts[metadataType] || 0;
+    const total = totalMetadataCounts[metadataType] || 0;
+    const countElement = document.getElementById(`metadata-count-${metadataType}`);
+    console.log(`Updating ${metadataType}: discovered=${discovered}, total=${total}, element exists=${!!countElement}`);
+    if (countElement) {
+      if (discovered > 0) {
+        // Show discovered/total format
+        countElement.textContent = `${discovered}/${total}`;
+        countElement.style.display = 'inline';
+        console.log(`Set ${metadataType} display to: ${discovered}/${total}`);
+      } else {
+        countElement.style.display = 'none';
+      }
+    }
+  });
+  
+  // Update total bucket display
+  updateTotalDisplay();
+}
+
+function updateTotalDisplay() {
+  const totalPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
+  const totalPointsElement = document.getElementById('metadata-count-total');
+  
+  if (totalPointsElement) {
+    totalPointsElement.textContent = `${Math.round(totalPoints)} pts`;
+    totalPointsElement.style.display = 'inline';
+    console.log(`Set total points display to: ${Math.round(totalPoints)} pts`);
+  }
+}
+
+// Throttle reordering to prevent excessive animations
+let reorderTimeout = null;
+
 function reorderCategoryBuckets() {
+  // Clear any pending reorder
+  if (reorderTimeout) {
+    clearTimeout(reorderTimeout);
+  }
+  
+  // Throttle reordering - only execute after 1 second of no new requests
+  reorderTimeout = setTimeout(() => {
+    performBucketReorder();
+  }, 1000);
+}
+
+function performBucketReorder() {
   const bucketContainer = document.getElementById('categoryBuckets');
   if (!bucketContainer) return;
   
   // Get all bucket elements
   const buckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
   
-  // Sort buckets by their count (highest first), then alphabetically by name for ties
+  // Sort buckets by score (highest first), then count (highest first), then alphabetically
   buckets.sort((a, b) => {
     const categoryA = a.id.replace('bucket-', '');
     const categoryB = b.id.replace('bucket-', '');
     
+    const scoreA = globalCategoryScores[categoryA] || 0;
+    const scoreB = globalCategoryScores[categoryB] || 0;
     const countA = globalCategoryCounts[categoryA] || 0;
     const countB = globalCategoryCounts[categoryB] || 0;
     
-    // Primary sort: by count (descending)
+    // Primary sort: by score (descending)
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA;
+    }
+    
+    // Secondary sort: by count (descending) for score ties
     if (countB !== countA) {
       return countB - countA;
     }
     
-    // Secondary sort: alphabetically (ascending) for ties
+    // Tertiary sort: alphabetically (ascending) for ties
     return categoryA.localeCompare(categoryB);
   });
   
-  // Animate the reordering
-  buckets.forEach((bucket, newIndex) => {
-    // Get current position
-    const currentRect = bucket.getBoundingClientRect();
-    
-    // Move bucket to new position in DOM
-    bucketContainer.appendChild(bucket);
-    
-    // Get new position after DOM reorder
-    const newRect = bucket.getBoundingClientRect();
-    
-    // Calculate the difference
-    const deltaX = currentRect.left - newRect.left;
-    const deltaY = currentRect.top - newRect.top;
-    
-    // Apply initial transform to make it appear in the old position
-    gsap.set(bucket, {
-      x: deltaX,
-      y: deltaY
-    });
-    
-    // Animate to the new position
-    gsap.to(bucket, {
-      x: 0,
-      y: 0,
-      duration: 0.6,
-      ease: "power2.out",
-      delay: newIndex * 0.05 // Small stagger for visual appeal
-    });
+  // Check if reordering is actually needed
+  const currentOrder = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
+  const needsReorder = buckets.some((bucket, index) => bucket !== currentOrder[index]);
+  
+  if (!needsReorder) {
+    console.log('Buckets already in correct order, skipping animation');
+    return;
+  }
+  
+  // Use a simpler fade-based reordering instead of position-based
+  // First, fade out all buckets
+  gsap.to(buckets, {
+    opacity: 0.3,
+    duration: 0.2,
+    ease: "power1.out"
   });
   
-  console.log('Category buckets reordered by count:', 
+  // Reorder DOM elements while faded
+  buckets.forEach((bucket) => {
+    bucketContainer.appendChild(bucket);
+  });
+  
+  // Fade back in with a slight stagger
+  gsap.to(buckets, {
+    opacity: 1,
+    duration: 0.3,
+    ease: "power1.out",
+    delay: 0.2,
+    stagger: 0.02
+  });
+  
+  console.log('Category buckets reordered by score then count:', 
     buckets.map(b => {
       const category = b.id.replace('bucket-', '');
-      return `${category}: ${globalCategoryCounts[category] || 0}`;
+      const count = globalCategoryCounts[category] || 0;
+      const score = Math.round(globalCategoryScores[category] || 0);
+      return `${category}: ${count} items (${score}pts)`;
     })
   );
 }
@@ -628,7 +1147,10 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
     
     gsap.delayedCall(2, () => {  // Wait longer for main text animation to complete
       const textElement = document.getElementById('text');
-      const currentText = textElement.textContent || textElement.innerText;
+      // Preserve HTML content, but get clean text for processing
+      const currentText = textElement.innerHTML.includes('<span') ? 
+        textElement.textContent || textElement.innerText : 
+        textElement.textContent || textElement.innerText;
       console.log('Current text for animation:', currentText);
       
       const { highlightedText, highlights } = highlightPhrasesInText(currentText, foundCategories);
@@ -646,6 +1168,9 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
             console.log('Animation complete, updating counter display and activating buckets');
             updateCategoryCountsDisplay();
             activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
+            
+            // Clean up any remaining HTML markup
+            cleanupTextContent();
             
             // Reorder buckets based on updated counts after a short delay
             gsap.delayedCall(0.5, () => {
@@ -727,7 +1252,12 @@ function animateTextChange(element, selectedText, newText) {
             },
             onComplete: () => {
               // Replace with formatted content after animation
-              element.innerHTML = formattedContent(newText);
+              // Check if text contains HTML markup (highlights) - if so, don't sanitize
+              if (newText.includes('<span class="phrase-highlight"')) {
+                element.innerHTML = newText;
+              } else {
+                element.innerHTML = formattedContent(newText);
+              }
             }
           });
         }
@@ -758,7 +1288,7 @@ function updateBackgroundForScore(score) {
   
   const backgroundColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
   
-  console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Color: ${backgroundColor}`);
+  //console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Color: ${backgroundColor}`);
   
   // Update the CSS variable
   document.documentElement.style.setProperty('--score-bg-color', backgroundColor);
@@ -792,11 +1322,45 @@ function replaceRelatedInfo(relatedItemObject) {
     relatedStoryTitleElement.textContent = '"' + relatedItemObject.story_title + '"';
   }
   
-  relatedScoreElement.textContent = "Score: " + relatedItemObject.score.toFixed(2).toString();
+  relatedScoreElement.textContent = "Similarity: " + relatedItemObject.score.toFixed(2).toString();
   
+  // Track metadata
+  trackMetadata(relatedItemObject);
+
   // Update background color based on score
   updateBackgroundForScore(relatedItemObject.score);
 } 
+
+function trackMetadata(relatedItemObject) {
+  // Track unique authors, books, and stories
+  let metadataUpdated = false;
+  
+  if (relatedItemObject.author && relatedItemObject.author !== "None" && !uniqueAuthors.has(relatedItemObject.author)) {
+    uniqueAuthors.add(relatedItemObject.author);
+    globalMetadataCounts.authors = uniqueAuthors.size;
+    metadataUpdated = true;
+   // console.log(`New author found: ${relatedItemObject.author}`);
+  }
+  
+  if (relatedItemObject.title && !uniqueBooks.has(relatedItemObject.title)) {
+    uniqueBooks.add(relatedItemObject.title);
+    globalMetadataCounts.books = uniqueBooks.size;
+    metadataUpdated = true;
+    //console.log(`New book found: ${relatedItemObject.title}`);
+  }
+  
+  if (relatedItemObject.story_title && relatedItemObject.story_title !== "None" && relatedItemObject.story_title !== "" && !uniqueStories.has(relatedItemObject.story_title)) {
+    uniqueStories.add(relatedItemObject.story_title);
+    globalMetadataCounts.stories = uniqueStories.size;
+    metadataUpdated = true;
+   // console.log(`New story found: ${relatedItemObject.story_title}`);
+  }
+  
+  if (metadataUpdated) {
+    updateMetadataCountsDisplay();
+   // console.log('Updated metadata counts:', globalMetadataCounts);
+  }
+}
 
 
 function highlightText(textElement) {
@@ -888,10 +1452,15 @@ async function initialize() {
       
       // Create category buckets after data is loaded
       createCategoryBuckets();
+      createMetadataBuckets();
       
       // Initialize global category counters
       initializeGlobalCounts();
       updateCategoryCountsDisplay();
+      updateMetadataCountsDisplay();
+      
+      // Set random starting quote
+      setRandomStartingQuote();
 
       hideLoading(); // Hide loading after initialization is complete
 

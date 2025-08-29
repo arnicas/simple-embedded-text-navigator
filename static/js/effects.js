@@ -16,7 +16,12 @@ function shuffle(a) {
 function showAnimationHideText(newText) {
     const animation = document.getElementById('animation');
     animation.style.display = 'flex';
-    animation.innerHTML = formattedContent(newText);
+    // Check if text contains ANY HTML markup - if so, don't sanitize
+    if (/<[^>]+>/.test(newText)) {
+      animation.innerHTML = newText;
+    } else {
+      animation.innerHTML = formattedContent(newText);
+    }
     const text = document.getElementById('text');
     text.style.display = 'none';
     text.innerHTML = '';
@@ -28,7 +33,12 @@ function showAnimationHideText(newText) {
     animation.innerHTML = '';
     const text = document.getElementById('text');
     text.style.display = 'flex';
-    text.innerHTML = formattedContent(newText);
+    // Check if text contains ANY HTML markup - if so, don't sanitize
+    if (/<[^>]+>/.test(newText)) {
+      text.innerHTML = newText;
+    } else {
+      text.innerHTML = formattedContent(newText);
+    }
   }
 
 function sanitize(string) {
@@ -49,13 +59,17 @@ function sanitize(string) {
   }
   
 export function formattedContent(newText) {
+    // If HTML tags are present, assume trusted markup and return as-is
+    if (/<[^>]*>/.test(newText)) {
+      return newText;
+    }
     // Sanitize the input
     let safeText = sanitize(newText);
     
     // Replace straight quotes with curly quotes
     safeText = safeText.replace(/(^|[-\u2014\s(\["])'/g, "$1\u2018");  // opening singles
     safeText = safeText.replace(/'/g, "\u2019");  // closing singles & apostrophes
-    safeText = safeText.replace(/(^|[-\u2014/\[(\u2018\s])"/g, "$1\u201c");  // opening doubles
+    safeText = safeText.replace(/(^|[-\u2014\/\[(\u2018\s])"/g, "$1\u201c");  // opening doubles
     safeText = safeText.replace(/"/g, "\u201d");  // closing doubles
     
     // Replace double hyphens with em-dashes
