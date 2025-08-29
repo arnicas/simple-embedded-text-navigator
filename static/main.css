@@ -48,6 +48,16 @@ body {
     letter-spacing: 2px;
 }
 
+#instructions {
+    font-family: "Macondo", cursive;
+    font-size: 16px;
+    color: #6B4423;
+    text-align: center;
+    margin: 0 0 20px 0;
+    font-style: italic;
+    opacity: 0.8;
+}
+
 #loading {
     width: 100%;
     height: 100vh;
@@ -76,6 +86,12 @@ body {
         letter-spacing: 1px;
     }
     
+    #instructions {
+        font-size: 14px;
+        margin: 0 0 15px 0;
+        padding: 0 10px;
+    }
+    
     #textContainer {
         padding: 15px;
         margin: 10px;
@@ -102,9 +118,9 @@ body {
 
 #categoryBuckets {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-    gap: 20px;
-    padding: 15px;
+    grid-template-columns: repeat(auto-fit, minmax(clamp(70px, 8vw, 100px), 1fr));
+    gap: clamp(10px, 2vw, 25px);
+    padding: clamp(10px, 2vw, 20px);
     max-width: 100%;
     justify-items: center;
 }
@@ -116,7 +132,7 @@ body {
     opacity: 0.6;
     transition: opacity 0.3s ease, transform 0.2s ease;
     cursor: pointer;
-    padding: 5px;
+    padding: clamp(3px, 0.5vw, 8px);
     position: relative;
 }
 
@@ -133,16 +149,17 @@ body {
 }
 
 .categoryBucket img {
-    width: 60px;
-    height: 60px;
+    width: clamp(50px, 5vw, 80px);
+    height: clamp(50px, 5vw, 80px);
     object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 6px;
+    border-radius: clamp(6px, 0.8vw, 12px);
+    margin-bottom: clamp(4px, 0.6vw, 8px);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
 }
 
 .categoryLabel {
-    font-size: 11px;
+    font-size: clamp(10px, 1.2vw, 14px);
     text-align: center;
     color: #555;
     font-weight: bold;
@@ -209,6 +226,20 @@ body {
     font-family: "Cinzel Decorative", cursive;
     font-weight: 700;
     font-style: normal;
+}
+
+.gutenberg-link {
+    color: #8B4513;
+    text-decoration: none;
+    font-size: 0.9em;
+    opacity: 0.8;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.gutenberg-link:hover {
+    color: #DAA520;
+    opacity: 1;
+    text-decoration: underline;
 }
 
 #text, #animation {
@@ -647,5 +678,67 @@ button {
         rgba(255, 255, 255, 0) 100%      /* Fully transparent at edge */
     );
     z-index: -1;
+}
+
+/* Category Modal Specific Styles */
+.category-modal-content {
+    max-width: 400px;
+    text-align: center;
+}
+
+.category-modal-image {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin: 0 auto 20px auto;
+    display: block;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: 3px solid #DAA520;
+}
+
+.category-modal-count {
+    font-family: "Cinzel Decorative", cursive;
+    font-size: 18px;
+    color: #8B4513;
+    font-weight: bold;
+    margin-top: 15px;
+    padding: 10px;
+    background: rgba(218, 165, 32, 0.1);
+    border-radius: 8px;
+}
+
+.category-modal-matches {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(240, 230, 140, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(218, 165, 32, 0.2);
+}
+
+.category-modal-matches h3 {
+    font-family: "Cinzel Decorative", cursive;
+    font-size: 16px;
+    color: #8B4513;
+    margin: 0 0 10px 0;
+    text-align: center;
+}
+
+.category-matches-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+}
+
+.match-phrase {
+    background: rgba(218, 165, 32, 0.2);
+    color: #2d1810;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-family: "Macondo", cursive;
+    font-size: 12px;
+    border: 1px solid rgba(218, 165, 32, 0.4);
+    display: inline-block;
 }
   

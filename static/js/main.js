@@ -29,6 +29,11 @@ let scores = {};
 // Global category counters that persist across sessions
 let globalCategoryCounts = {};
 
+// Global category matched phrases that persist across sessions
+let globalCategoryMatches = {};
+
+
+
 
 function showLoading() {
   document.getElementById('loading').style.display = 'flex';
@@ -99,7 +104,7 @@ async function findRelatedText(selectedText) {
   alreadySeen.push(chosen['object']);
 
   const text = chosen['object']['text'];
-  const book_id = chosen['object']['book_id'];
+  const book_id = chosen['object']['book'];
   const score = chosen['similarity'];
 
   const author = chosen['object']['author'];
@@ -228,12 +233,65 @@ function createCategoryBuckets() {
     
     const label = document.createElement('div');
     label.className = 'categoryLabel';
-    label.innerHTML = `${categoryName}<br><span class="category-count" id="count-${categoryName}">0</span>`;
+    label.innerHTML = `${categoryName}<br><span class="category-count" id="count-${categoryName}" style="display: none;">0</span>`;
+    
+    // Add click event listener for modal
+    bucketDiv.addEventListener('click', () => {
+      showCategoryModal(categoryName, img.src);
+    });
     
     bucketDiv.appendChild(img);
     bucketDiv.appendChild(label);
     bucketContainer.appendChild(bucketDiv);
   });
+}
+
+function showCategoryModal(categoryName, imageSrc) {
+  const modal = document.getElementById('categoryModal');
+  const modalImage = document.getElementById('categoryModalImage');
+  const modalTitle = document.getElementById('categoryModalTitle');
+  const modalCount = document.getElementById('categoryModalCount');
+  const modalMatches = document.getElementById('categoryModalMatches');
+  
+  // Set modal content
+  modalImage.src = imageSrc;
+  modalImage.alt = categoryName;
+  modalImage.style.display = 'block'; // Show the image
+  
+  // Set title with count
+  const count = globalCategoryCounts[categoryName] || 0;
+  const capitalizedName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
+  if (count > 0) {
+    modalTitle.textContent = `${capitalizedName}: ${count} Found`;
+    modalCount.style.display = 'none'; // Hide the separate count element
+  } else {
+    modalTitle.textContent = capitalizedName;
+    modalCount.textContent = `Keep exploring to discover ${categoryName} elements!`;
+    modalCount.style.display = 'block';
+  }
+  
+  // Set matched phrases
+  const matches = globalCategoryMatches[categoryName];
+  if (matches && matches.size > 0) {
+    const matchesArray = Array.from(matches).sort();
+    modalMatches.innerHTML = `
+      <h3>Words & Phrases You've Found:</h3>
+      <div class="category-matches-list">
+        ${matchesArray.map(phrase => `<span class="match-phrase">${phrase}</span>`).join('')}
+      </div>
+    `;
+    modalMatches.style.display = 'block';
+  } else {
+    modalMatches.style.display = 'none';
+  }
+  
+  // Show modal
+  modal.classList.remove('hidden');
+}
+
+function hideCategoryModal() {
+  const modal = document.getElementById('categoryModal');
+  modal.classList.add('hidden');
 }
 
 function highlightPhrasesInText(text, categories) {
@@ -376,28 +434,45 @@ function animatePhrasesToBuckets(highlights, onComplete) {
 }
 
 function initializeGlobalCounts() {
-  // Initialize global counters for all categories
+  // Initialize global counters and matches for all categories
   if (categories && Object.keys(categories).length > 0) {
     Object.keys(categories).forEach(categoryName => {
       if (!(categoryName in globalCategoryCounts)) {
         globalCategoryCounts[categoryName] = 0;
+      }
+      if (!(categoryName in globalCategoryMatches)) {
+        globalCategoryMatches[categoryName] = new Set(); // Use Set to avoid duplicates
       }
     });
   }
 }
 
 function incrementCategoryCounts(selectedCategories, foundCategories) {
-  // Increment global counters based on new matches
+  // Increment global counters and track matched phrases
   const newCounts = {};
   
-  // Count selected categories
+  // Count selected categories and track phrases
   selectedCategories.forEach(match => {
     newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+    // Add phrases to global matches set
+    if (!globalCategoryMatches[match.category]) {
+      globalCategoryMatches[match.category] = new Set();
+    }
+    match.phrases.forEach(phrase => {
+      globalCategoryMatches[match.category].add(phrase.toLowerCase());
+    });
   });
   
-  // Add found categories
+  // Add found categories and track phrases
   foundCategories.forEach(match => {
     newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+    // Add phrases to global matches set
+    if (!globalCategoryMatches[match.category]) {
+      globalCategoryMatches[match.category] = new Set();
+    }
+    match.phrases.forEach(phrase => {
+      globalCategoryMatches[match.category].add(phrase.toLowerCase());
+    });
   });
   
   // Add to global counters
@@ -406,6 +481,7 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   });
   
   console.log('Updated global category counts:', globalCategoryCounts);
+  console.log('Updated global category matches:', globalCategoryMatches);
 }
 
 function updateCategoryCountsDisplay() {
@@ -413,7 +489,12 @@ function updateCategoryCountsDisplay() {
   Object.entries(globalCategoryCounts).forEach(([category, count]) => {
     const countElement = document.getElementById(`count-${category}`);
     if (countElement) {
-      countElement.textContent = count.toString();
+      if (count > 0) {
+        countElement.textContent = count.toString();
+        countElement.style.display = 'inline';
+      } else {
+        countElement.style.display = 'none';
+      }
     }
   });
 }
@@ -685,12 +766,12 @@ function updateBackgroundForScore(score) {
 
 function replaceRelatedInfo(relatedItemObject) {
 
-  const relatedIdElement = document.getElementById('relatedId');
   const relatedAuthorElement = document.getElementById('relatedAuthor');
   const relatedTitleElement = document.getElementById('relatedTitle');
   const relatedStoryTitleElement = document.getElementById('relatedStoryTitle');
   //const relatedBirthElement = document.getElementById('relatedBirth');
   const relatedScoreElement = document.getElementById('relatedScore');
+  const relatedIdElement = document.getElementById('relatedId');
 
 
   if (relatedItemObject.author === "None") {
@@ -699,8 +780,11 @@ function replaceRelatedInfo(relatedItemObject) {
     relatedAuthorElement.textContent = relatedItemObject.author;
   }
 
-  relatedIdElement.textContent = relatedItemObject.id;  // book_id
-  relatedTitleElement.textContent = relatedItemObject.title;
+  // Create title with linked ID in parentheses
+  // Extract numeric part from ID (handles PG12345, 12345, PG12345_2, etc.)
+  const numericId = relatedItemObject.id.replace(/^PG/, '').replace(/_.*$/, '');
+  const gutenbergUrl = `https://www.gutenberg.org/ebooks/${numericId}`;
+  relatedTitleElement.innerHTML = `${relatedItemObject.title} (<a href="${gutenbergUrl}" target="_blank" class="gutenberg-link">${relatedItemObject.id}</a>)`;
   
   if (relatedItemObject.story_title === "None" || !relatedItemObject.story_title) {
     relatedStoryTitleElement.textContent = "";
@@ -849,11 +933,32 @@ try {
       helpModal.classList.add('hidden');
     }
   });
+
+  // Category modal functionality
+  const categoryModal = document.getElementById('categoryModal');
+  const categoryCloseButton = document.getElementById('categoryModalClose');
   
-  // Hide help modal with Escape key
+  // Hide category modal when clicking close button
+  categoryCloseButton.addEventListener('click', () => {
+    hideCategoryModal();
+  });
+  
+  // Hide category modal when clicking outside the modal content
+  categoryModal.addEventListener('click', (e) => {
+    if (e.target === categoryModal) {
+      hideCategoryModal();
+    }
+  });
+  
+  // Hide modals with Escape key
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !helpModal.classList.contains('hidden')) {
-      helpModal.classList.add('hidden');
+    if (e.key === 'Escape') {
+      if (!helpModal.classList.contains('hidden')) {
+        helpModal.classList.add('hidden');
+      }
+      if (!categoryModal.classList.contains('hidden')) {
+        hideCategoryModal();
+      }
     }
   });
 
