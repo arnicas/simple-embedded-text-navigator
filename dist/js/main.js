@@ -5,7 +5,7 @@ import SplitType from 'split-type';
 // import gsap text plugin
 import { TextPlugin } from 'gsap/TextPlugin';
 gsap.registerPlugin(TextPlugin);
-import { randomY, showAnimationHideText, formattedContent, showTextHideAnimation } from './effects.js';
+import { randomY, formattedContent } from './effects.js';
 
 
 env.localModelPath = './site-data/cache';
@@ -142,17 +142,7 @@ function countDatasetMetadata() {
   totalMetadataCounts.authors = datasetAuthors.size;
   totalMetadataCounts.books = datasetBooks.size;
   totalMetadataCounts.stories = datasetStories.size;
-  
-  // console.log('Dataset metadata counts:');
-  // console.log(`- Authors: ${totalMetadataCounts.authors} unique`);
-  // console.log(`- Books: ${totalMetadataCounts.books} unique`);
-  // console.log(`- Stories: ${totalMetadataCounts.stories} unique`);
-  
-  // // Log some examples
-  // console.log('Sample authors:', Array.from(datasetAuthors).slice(0, 5));
-  // console.log('Sample books:', Array.from(datasetBooks).slice(0, 5));
-  // console.log('Sample stories:', Array.from(datasetStories).slice(0, 5));
-  
+
   return totalMetadataCounts;
 }
 
@@ -166,11 +156,9 @@ function setRandomStartingQuote() {
   const randomIndex = Math.floor(Math.random() * data.length);
   const randomItem = data[randomIndex];
   
-  console.log('Selected random starting quote:', randomItem);
-  
+   
   // Analyze the starting text for categories and scores
   const foundCategories = getCategory(randomItem.text);
-  console.log('Starting text categories found:', foundCategories);
   
   // Set as current result
   currentResult = {
@@ -195,7 +183,7 @@ function setRandomStartingQuote() {
   
   // Process the initial categories and update scores
   if (foundCategories.length > 0) {
-    console.log('Processing initial categories for scoring');
+    //console.log('Processing initial categories for scoring');
     incrementCategoryCounts([], foundCategories); // No selected categories, only found
     updateCategoryCountsDisplay();
     activateCategoryBuckets([], foundCategories);
@@ -206,7 +194,6 @@ function setRandomStartingQuote() {
     });
   }
   
-  console.log('Set random starting quote from:', randomItem.author, '-', randomItem.title);
 }
 
 function getDatasetMetadataCounts() {
