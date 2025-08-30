@@ -1,1 +1,114 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Fairy Tale Island</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:ital,wght@0,400;0,500;0,700;0,800;0,900;1,400;1,500;1,700;1,800;1,900&family=Cinzel+Decorative:wght@400;700;900&family=Federicka+the+Great&family=Macondo:wght@400&family=Noto+Color+Emoji&family=Patrick+Hand&display=swap" rel="stylesheet"><link rel="stylesheet" href="index.d3adf0da.css"><script type="module" src="index.2be9d89a.js"></script></head><body> <div class="container">  <div id="helpButton">?</div>  <div id="helpModal" class="hidden modal"> <div class="modal-content"> <span class="close">&times;</span> <h2>What's the Fairy Tale Text Hunt?</h2> <div class="help-section"> <h3>📚 Explore Connected Stories</h3> <p>Select a text section to find similar passages from other public domain fairy tale texts &mdash; using an in-browser embedding index and search. There is no server! As you browse the story lines, watch for highlighted elements that fly into various categories and award you points, potentially. If you want to try to fill in various category buckets, you will want to select text that might "lead you" somewhere. Magical creatures are harder than you might think!</p> </div> <div class="help-section"> <h3>🎯 Category Buckets</h3> <p>Numbers show how many times each theme has appeared in your exploration, and how rare something is. Higher scores are given for rarer items. They were originally seeded by looking at top unigram and bigrams, then added to during use and weighted with Claude's help and some python code. I have no doubt missed many and will update as I play it. The icons were made with a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> that uses a Flux Lora for a medieval style and adds a label.</p> </div> <div class="help-section"> <h3>Selection Similarity via Embeddings</h3> <p>The similarity score under the text shows how "similar" a new text is to what you selected. This app uses a tiny embedding model, <a href="https://huggingface.co/TaylorAI/bge-micro">bge-micro,</a> and Transformers.js. The index and similarity in the browser are handled with client-vector-search, a node package. The background color changes slightly depending on how high the similarity score is.</p> </div> <div class="help-section"> <h3>Text Source</h3> <p>The text is sourced from Project Gutenberg book fairy tales, processed into sentences and then classified for "descriptiveness" after training a small spaCy model. The dataset was later reduced quite a bit to a very few authors, for this demo app.</p> </div> <div class="help-section"> <h3>Who Made This, and More Info?</h3> <p>Not really a vibe coding thing, I've been messing with the core similarity stuff and dataset for a year now. But this was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tales content. I did get Claude's help to finish this version of the UI. Made by @arnicas/Lynn Cherny on <a href="https://x.com/arnicas">X</a>, <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, and the repo is at the badly named<a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>.</p> </div> </div> </div>  <div id="categoryModal" class="hidden modal"> <div class="category-modal-content modal-content"> <span class="close" id="categoryModalClose">&times;</span> <div id="categoryModalBody"> <img id="categoryModalImage" alt class="category-modal-image" style="display:none"> <h2 id="categoryModalTitle"></h2> <div id="categoryModalCount" class="category-modal-count"></div> <div id="categoryModalMatches" class="category-modal-matches"></div> </div> </div> </div>  <div id="content"> <div id="loading"> <div id="loaderText">Loading...</div> </div> <div id="message"></div> <h1 id="appTitle">Fairy Tale Text Hunt</h1> <div id="instructions">Select a section of text (a few words) with your mouse or finger to find a new line!</div> <div id="textContainer"> <div id="text">Loading a random fairy tale passage...</div> <div id="animation"></div> </div> <div id="sourceContainer"> <div id="titlerow"> <div class="relatedItems" id="relatedTitle">Loading...</div> <div class="relatedItems" id="relatedAuthor">Loading...</div> </div> <div id="otherRows"> <div class="relatedItems" id="relatedStoryTitle"></div> <div class="relatedItems" id="relatedScore"></div> </div> </div> <div id="categoryContainer"> <div id="metadataContainer"> <div id="metadataBuckets"></div> </div> <div id="categoryBuckets"></div> </div>  </div> </div> </body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fairy Tale Island</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Alegreya+SC:ital,wght@0,400;0,500;0,700;0,800;0,900;1,400;1,500;1,700;1,800;1,900&family=Cinzel+Decorative:wght@400;700;900&family=Federicka+the+Great&family=Macondo:wght@400&family=Noto+Color+Emoji&family=Patrick+Hand&display=swap" rel="stylesheet">
+   <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.11.4/TextPlugin.min.js"></script> -->
+    <link rel="stylesheet" href="/index.5ebb9464.css">
+    <script src="/index.c2fbcaa3.js" defer=""></script>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Help/Info button -->
+        <div id="helpButton">?</div>
+        
+        <!-- Help popup modal -->
+        <div id="helpModal" class="modal hidden">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>What's the Fairy Tale Text Hunt?</h2>
+                <div class="help-section">
+                    <h3>📚 Explore Connected Stories</h3>
+                    <p>Select a text section to find similar passages from other public domain fairy tale texts &mdash; using an in-browser embedding index and search. There is no server! As you browse the story lines, watch for highlighted elements that fly into various categories and award you points, potentially. If you want to try to fill in various category buckets, you will want to select text that might "lead you" somewhere. Magical creatures are harder than you might think!</p>
+                </div>
+                <div class="help-section">
+                    <h3>🎯 Category Buckets</h3>
+                    <p>Numbers show how many times each theme has appeared in your exploration, and how rare something is. Higher scores are given for rarer items. They were originally seeded by looking at top unigram and bigrams, then added to during use and weighted with Claude's help and some python code. I have no doubt missed many and will update as I play it. The icons were made with a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> that uses a Flux Lora for a medieval style and adds a label.</p>
+                </div>
+                <div class="help-section">
+                    <h3>Selection Similarity via Embeddings</h3>
+                    <p>The similarity score under the text shows how "similar" a new text is to what you selected. This app uses a tiny embedding model, <a href="https://huggingface.co/TaylorAI/bge-micro">bge-micro,</a> and Transformers.js. The index and similarity in the browser are handled with client-vector-search, a node package. The background color changes slightly depending on how high the similarity score is.</p>
+                </div>
+                <div class="help-section">
+                    <h3>Text Source</h3>
+                    <p>The text is sourced from Project Gutenberg book fairy tales, processed into sentences and then classified for "descriptiveness" after training a small spaCy model. The dataset was later reduced quite a bit to a very few authors, for this demo app.</p>
+                </div>
+                <div class="help-section">
+                    <h3>Who Made This, and More Info?</h3>
+                    <p>Not really a vibe coding thing, I've been messing with the core similarity stuff and dataset for a year now. But this was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tales content. I did get Claude's help to finish this version of the UI. Made by @arnicas/Lynn Cherny on <a href="https://x.com/arnicas">X</a>, <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, and the repo is at the badly named<a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Detail Modal -->
+        <div id="categoryModal" class="modal hidden">
+            <div class="modal-content category-modal-content">
+                <span class="close" id="categoryModalClose">&times;</span>
+                <div id="categoryModalBody">
+                    <img id="categoryModalImage" alt="" class="category-modal-image" style="display: none">
+                    <h2 id="categoryModalTitle"></h2>
+                    <div id="categoryModalCount" class="category-modal-count"></div>
+                    <div id="categoryModalMatches" class="category-modal-matches"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!--
+        <div class="sidebar" id="sidebar">
+            <button id="toggleSidebar">Open Scores</button>
+            <div id="score-container" class="hidden">
+                <div class="score-column">
+                </div>
+            </div>
+        </div>
+        -->
+        <div id="content">
+            <div id="loading">
+                <div id="loaderText">Loading...</div>
+            </div>
+            <div id="message"></div>
+
+            <h1 id="appTitle">Fairy Tale Text Hunt</h1>
+            
+            <div id="instructions">Select a section of text (a few words) with your mouse or finger to find a new line!</div>
+            
+            <div id="textContainer">
+                <div id="text">Loading a random fairy tale passage...</div>
+                <div id="animation"></div>
+            </div>
+            <div id="sourceContainer">
+                <div id="titlerow">
+                    <div class="relatedItems" id="relatedTitle">Loading...</div>
+                    <div class="relatedItems" id="relatedAuthor">Loading...</div>
+                </div>
+                <div id="otherRows">
+                    <div class="relatedItems" id="relatedStoryTitle"></div>
+                    <div class="relatedItems" id="relatedScore"></div>
+                </div>
+            </div>
+            <div id="categoryContainer">
+                <div id="metadataContainer">
+                    <div id="metadataBuckets"></div>
+                </div>
+                <div id="categoryBuckets"></div>
+            </div>
+            <!--
+            <div id="chartSection">
+                <div id="chartContainer" class="chart-container hidden">
+                    <div class="chart" id="scatterplot"></div>
+                </div>
+                <button id="toggleChart">Show map</button>
+            </div> 
+            -->
+        </div> 
+        
+    </div>
+
+</body>
+</html>

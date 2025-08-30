@@ -766,24 +766,20 @@ function animatePhrasesToBuckets(highlights, onComplete) {
         }
       });
       
-      // Fade original phrase highlight gradually
+      // Fade original phrase highlight styling but keep text visible
       gsap.to(phraseElement, {
-        opacity: 0.7,
-        duration: 0.5,
-        delay: 0.3,
+        backgroundColor: 'transparent',
+        duration: 1.0,
+        delay: 0.5,
         onComplete: () => {
-          // Remove highlight completely after a delay with safer cleanup
-          gsap.delayedCall(1.5, () => {
-            // Get the text element and completely regenerate its content
-            const textElement = document.getElementById('text');
-            if (textElement) {
-              // Get the clean text content without any HTML
-              const cleanText = textElement.textContent || textElement.innerText;
-              // Completely replace with clean formatted content
-              textElement.innerHTML = formattedContent(cleanText);
-             // console.log('Cleaned up text content, removed all HTML markup');
-            }
-          });
+          // Remove all highlight styling but keep text visible
+          phraseElement.style.background = 'transparent';
+          phraseElement.style.border = 'none';
+          phraseElement.style.boxShadow = 'none';
+          phraseElement.style.borderRadius = '0';
+          phraseElement.style.padding = '0';
+          phraseElement.style.opacity = '1'; // Keep text fully visible
+          console.log('Removed all highlight styling but kept text visible');
         }
       });
     });
@@ -895,12 +891,12 @@ function showScoreCelebration(score) {
   
   tl.to(scoreElement, {
     opacity: 1,
-    scale: 1.5,
+    scale: 2.2,
     duration: 0.3,
     ease: "back.out(1.7)"
   })
   .to(scoreElement, {
-    scale: 1.2,
+    scale: 1.8,
     duration: 0.2,
     ease: "power2.out"
   })
@@ -922,15 +918,25 @@ function showScoreCelebration(score) {
 }
 
 function cleanupTextContent() {
-  // Safety function to ensure text content is always clean
+  // Safety function to remove highlight styling but keep text visible
   const textElement = document.getElementById('text');
   const animationElement = document.getElementById('animation');
   
   [textElement, animationElement].forEach(element => {
-    if (element && element.innerHTML.includes('<span')) {
-      const cleanText = element.textContent || element.innerText;
-      element.innerHTML = formattedContent(cleanText);
-      console.log('Cleaned up HTML markup from text element');
+    if (element) {
+      // Find any remaining phrase-highlight spans and remove styling but keep text
+      const highlights = element.querySelectorAll('.phrase-highlight');
+      highlights.forEach(highlight => {
+        highlight.style.background = 'transparent';
+        highlight.style.border = 'none';
+        highlight.style.boxShadow = 'none';
+        highlight.style.borderRadius = '0';
+        highlight.style.padding = '0';
+        highlight.style.opacity = '1'; // Keep text fully visible
+      });
+      if (highlights.length > 0) {
+        console.log(`Removed styling from ${highlights.length} remaining highlights but kept text visible`);
+      }
     }
   });
 }
@@ -1107,8 +1113,7 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
     bucket.title = ''; // Clear tooltip
   });
   
-  // Increment global counters but don't update display yet
-  incrementCategoryCounts(selectedCategories, foundCategories);
+  // Don't increment counters yet - wait until animations complete
   
   // Set tooltips but don't activate buckets yet (wait for animation to complete)
   selectedCategories.forEach(match => {
@@ -1164,8 +1169,9 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
         gsap.delayedCall(0.3, () => {
           console.log('Starting phrase animation');
           animatePhrasesToBuckets(highlights, () => {
-            // Update counters and activate buckets after all animations complete
-            console.log('Animation complete, updating counter display and activating buckets');
+            // NOW increment counters and trigger score celebrations after animations complete
+            console.log('Animation complete, incrementing counters and updating display');
+            incrementCategoryCounts(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
             updateCategoryCountsDisplay();
             activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
             
@@ -1370,15 +1376,18 @@ function highlightText(textElement) {
     console.log('selected words', words);
 
     if (words.length > 1 || selectedText.length >= 4) {  // selection rules
-      if (selectedText && selection.anchorNode.parentElement === textElement) {
+      // Check if selection is within the text element (more flexible check)
+      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+      const isWithinTextElement = range && textElement.contains(range.commonAncestorContainer);
+      
+      if (selectedText && isWithinTextElement) {
         console.log('in valid selection');
 
         // Create highlight span
         const span = document.createElement('span');
         span.className = 'highlight';
         
-        // Get the range and handle multiple nodes
-        const range = selection.getRangeAt(0);
+        // Use the range we already got from the validation check
         try {
           range.surroundContents(span);
         } catch (e) {
