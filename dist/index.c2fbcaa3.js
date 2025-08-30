@@ -1687,79 +1687,58 @@ function calculateAndCelebrateMetadataScore() {
 function highlightText(textElement) {
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
-    const words = selectedText.split(' ');
-    console.log('selected words', words);
-    if (words.length > 1 || selectedText.length >= 4) {
-        // More robust check for selection within text element
-        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-        // Check if selection is within text element using multiple validation methods
-        let isWithinTextElement = false;
-        if (range) {
-            // Method 1: Check if any part of the range intersects with the text element
-            const rect = range.getBoundingClientRect();
-            const textRect = textElement.getBoundingClientRect();
-            // Check if the selection bounding rect overlaps with text element
-            isWithinTextElement = !(rect.right < textRect.left || rect.left > textRect.right || rect.bottom < textRect.top || rect.top > textRect.bottom);
-            // Method 2: Also check if start or end containers are within text element
-            if (!isWithinTextElement) isWithinTextElement = textElement.contains(range.startContainer) || textElement.contains(range.endContainer) || textElement.contains(range.commonAncestorContainer);
-            console.log('Selection validation:', {
-                selectedText: selectedText.substring(0, 20) + (selectedText.length > 20 ? '...' : ''),
-                boundingBoxOverlap: !(rect.right < textRect.left || rect.left > textRect.right || rect.bottom < textRect.top || rect.top > textRect.bottom),
-                containsStart: textElement.contains(range.startContainer),
-                containsEnd: textElement.contains(range.endContainer),
-                containsCommon: textElement.contains(range.commonAncestorContainer),
-                isWithinTextElement
-            });
-        }
-        if (selectedText && isWithinTextElement) {
-            console.log('in valid selection');
-            // Create highlight span
-            const span = document.createElement('span');
-            span.className = 'highlight';
-            // Use the range we already got from the validation check
-            try {
-                range.surroundContents(span);
-            } catch (e) {
-                // If surroundContents fails, use this alternative approach
-                span.appendChild(range.extractContents());
-                range.insertNode(span);
-                // Check if the selection is valid
-                if (span && span.parentNode) console.log('Highlight span created successfully');
-                else {
-                    console.error('Failed to create highlight span');
-                    // If the highlight span creation fails, show a message to the user
-                    const messageElement = document.getElementById('message');
-                    messageElement.textContent = "Failed to highlight the text. Please try again.";
-                    messageElement.style.display = 'flex';
-                    (0, _gsap.gsap).to(messageElement, {
-                        duration: 4,
-                        opacity: 1,
-                        onComplete: ()=>{
-                            messageElement.textContent = "";
-                            messageElement.style.display = 'none';
-                        }
-                    });
-                }
+    console.log('Processing text selection:', selectedText.substring(0, 30) + '...');
+    // Simple validation - just check if text exists and element contains selection
+    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const isWithinTextElement = range && textElement.contains(range.commonAncestorContainer);
+    if (selectedText && isWithinTextElement) {
+        console.log('in valid selection');
+        // Create highlight span
+        const span = document.createElement('span');
+        span.className = 'highlight';
+        // Use the range we already got from the validation check
+        try {
+            range.surroundContents(span);
+        } catch (e) {
+            // If surroundContents fails, use this alternative approach
+            span.appendChild(range.extractContents());
+            range.insertNode(span);
+            // Check if the selection is valid
+            if (span && span.parentNode) console.log('Highlight span created successfully');
+            else {
+                console.error('Failed to create highlight span');
+                // If the highlight span creation fails, show a message to the user
+                const messageElement = document.getElementById('message');
+                messageElement.textContent = "Failed to highlight the text. Please try again.";
+                messageElement.style.display = 'flex';
+                (0, _gsap.gsap).to(messageElement, {
+                    duration: 4,
+                    opacity: 1,
+                    onComplete: ()=>{
+                        messageElement.textContent = "";
+                        messageElement.style.display = 'none';
+                    }
+                });
             }
-            // Wait for 1 second, then proceed with text change
-            (0, _gsap.gsap).delayedCall(1, async ()=>{
-                const relatedItemObject = await findRelatedText(selectedText);
-                console.log('got relatedItem', relatedItemObject);
-                if (relatedItemObject) {
-                    animateTextChange(textElement, selectedText, relatedItemObject.text);
-                    replaceRelatedInfo(relatedItemObject);
-                    updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
-                    // Reset selection tracking after text change
-                    lastSelectionText = '';
-                } else {
-                    animateTextChange(textElement, selectedText, "Error, No text found.");
-                    // Reset selection tracking after text change
-                    lastSelectionText = '';
-                }
-            });
         }
+        // Wait for 1 second, then proceed with text change
+        (0, _gsap.gsap).delayedCall(1, async ()=>{
+            const relatedItemObject = await findRelatedText(selectedText);
+            console.log('got relatedItem', relatedItemObject);
+            if (relatedItemObject) {
+                animateTextChange(textElement, selectedText, relatedItemObject.text);
+                replaceRelatedInfo(relatedItemObject);
+                updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
+                // Reset selection tracking after text change
+                lastSelectionText = '';
+            } else {
+                animateTextChange(textElement, selectedText, "Error, No text found.");
+                // Reset selection tracking after text change
+                lastSelectionText = '';
+            }
+        });
     } else {
-        // show a message to the user that fades out 
+        // show a message to the user that fades out
         console.log('in invalid selection');
         const messageElement = document.getElementById('message');
         messageElement.textContent = "Please select a longer word or phrase.";
@@ -1840,62 +1819,87 @@ document.addEventListener('DOMContentLoaded', async ()=>{
                 if (!categoryModal.classList.contains('hidden')) hideCategoryModal();
             }
         });
-        // Unified selection handler for both desktop and mobile
-        let selectionTimeout = null;
+        // Simplified selection handler - only use mouseup for reliability
         let isProcessingSelection = false;
-        let lastSelectionText1 = '';
+        let lastProcessedSelection = '';
         function handleSelection() {
-            // Prevent multiple simultaneous processing
+            // Prevent processing if already busy
             if (isProcessingSelection) {
-                console.log('Selection already being processed, skipping...');
+                console.log('Already processing selection, skipping...');
                 return;
             }
-            // Clear any existing timeout to prevent multiple calls
-            if (selectionTimeout) clearTimeout(selectionTimeout);
-            console.log('Selection event triggered, processing in 200ms...');
-            // Delay to allow selection to stabilize
-            selectionTimeout = setTimeout(()=>{
-                const currentSelection = window.getSelection().toString().trim();
-                // Check if this is the same selection we just processed
-                if (currentSelection === lastSelectionText1 && lastSelectionText1 !== '') {
-                    console.log('Duplicate selection detected, skipping...');
-                    return;
-                }
-                // Check if selection is still valid
-                if (currentSelection.length > 0) {
-                    console.log('Processing selection:', currentSelection.substring(0, 30) + '...');
-                    isProcessingSelection = true;
-                    lastSelectionText1 = currentSelection;
-                    highlightText(textElement);
-                    // Reset processing flag after a delay
-                    setTimeout(()=>{
-                        isProcessingSelection = false;
-                    }, 1000);
-                }
-            }, 200);
-        }
-        // Desktop selection
-        textElement.addEventListener('mouseup', handleSelection);
-        // Mobile selection support
-        textElement.addEventListener('touchend', handleSelection);
-        // Handle selection changes (useful for keyboard selection or programmatic changes)
-        // Only listen for selectionchange on document, not textElement specifically
-        let lastSelectionChangeTime = 0;
-        document.addEventListener('selectionchange', ()=>{
-            const now = Date.now();
-            // Throttle selectionchange events to once per 300ms
-            if (now - lastSelectionChangeTime < 300) return;
-            lastSelectionChangeTime = now;
+            // Get the current selection
             const selection = window.getSelection();
-            if (selection.rangeCount > 0 && selection.toString().trim().length > 0) {
-                const range = selection.getRangeAt(0);
-                // Check if selection intersects with our text element
-                if (textElement.contains(range.startContainer) || textElement.contains(range.endContainer) || textElement.contains(range.commonAncestorContainer)) {
-                    console.log('Selection change detected within text element');
-                    handleSelection();
-                }
+            const selectedText = selection.toString().trim();
+            // Basic validation
+            if (selectedText.length < 4) return; // Too short
+            // Check for duplicate
+            if (selectedText === lastProcessedSelection) {
+                console.log('Duplicate selection, skipping...');
+                return;
             }
-        });
+            console.log('Processing selection:', selectedText.substring(0, 30) + '...');
+            // Set processing flag
+            isProcessingSelection = true;
+            lastProcessedSelection = selectedText;
+            // Process the selection
+            highlightText(textElement);
+            // Reset processing flag after animation completes
+            setTimeout(()=>{
+                isProcessingSelection = false;
+            }, 3000); // Long enough for text change animation to complete
+        }
+        // Cross-platform selection handling
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768 && window.innerHeight <= 1024;
+        }
+        if (isMobile()) {
+            // Mobile: Use touch events
+            console.log('Using mobile selection handling');
+            textElement.addEventListener('touchend', ()=>{
+                // Delay to allow touch selection menu to appear/disappear
+                setTimeout(()=>{
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+                    if (selectedText.length >= 4) {
+                        console.log('Mobile selection detected:', selectedText.substring(0, 30) + '...');
+                        handleSelection();
+                    }
+                }, 300); // Longer delay for mobile
+            });
+            // Also listen for selection changes on mobile
+            document.addEventListener('selectionchange', ()=>{
+                setTimeout(()=>{
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+                    if (selectedText.length >= 4 && !isProcessingSelection) {
+                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                        if (range && textElement.contains(range.commonAncestorContainer)) {
+                            console.log('Mobile selection change detected');
+                            handleSelection();
+                        }
+                    }
+                }, 200);
+            });
+        } else {
+            // Desktop: Use mouse events
+            console.log('Using desktop selection handling');
+            textElement.addEventListener('mouseup', handleSelection);
+            // Fallback for keyboard-based selections
+            document.addEventListener('selectionchange', ()=>{
+                setTimeout(()=>{
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+                    if (selectedText.length >= 4 && !isProcessingSelection) {
+                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                        if (range && textElement.contains(range.commonAncestorContainer)) {
+                            console.log('Keyboard selection detected');
+                            handleSelection();
+                        }
+                    }
+                }, 100);
+            });
+        }
     } catch (error) {
         console.error('Failed to initialize document:', error);
     }
@@ -50059,6 +50063,6 @@ function hideLoading() {
     document.getElementById('loading').style.display = 'none';
 }
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","gsap":"fPSuC"}]},["kMhFY","3MVHK"], "3MVHK", "parcelRequire94c2")
+},{"gsap":"fPSuC","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}]},["kMhFY","3MVHK"], "3MVHK", "parcelRequire94c2")
 
 //# sourceMappingURL=index.c2fbcaa3.js.map
