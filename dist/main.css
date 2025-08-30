@@ -306,12 +306,15 @@ body {
         radial-gradient(ellipse at 40% 80%, rgba(222, 184, 135, 0.35) 0%, transparent 50%),
         linear-gradient(135deg, rgba(240, 230, 140, 0.25) 0%, rgba(218, 165, 32, 0.2) 100%);
     border-radius: 8px;
-    padding: 2px 4px;
+    padding: 1px 4px;
     transition: all 0.5s ease;
     position: relative;
     box-shadow: 
         inset 0 1px 2px rgba(218, 165, 32, 0.2),
         0 1px 3px rgba(139, 69, 19, 0.1);
+    /* Match the parent's word spacing to prevent layout jumps */
+    word-spacing: inherit;
+    margin-right: 0.1em; /* Match the word-spacing value */
 }
 
 .phrase-highlight::before {
@@ -347,9 +350,10 @@ body {
 #text, #animation {
     font-family: "Macondo";
     font-size: 22px;
-    line-height: 1.6;
+    line-height: 1.65;
     text-align: center;
     font-weight: 400;
+    word-spacing: 0.1em;
     
     /* Mobile selection improvements */
     -webkit-user-select: text;
