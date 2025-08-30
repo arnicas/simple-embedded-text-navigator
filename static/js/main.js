@@ -699,33 +699,66 @@ function highlightPhrasesInText(text, categories) {
   console.log('highlightPhrasesInText called with text:', text.substring(0, 100) + '...');
   console.log('Categories to process:', categories);
   
-  let highlightedText = text;
-  const highlights = [];
+  // Collect all potential matches with their positions first
+  const potentialMatches = [];
   
-  // Process each category's phrases
   categories.forEach(match => {
     console.log(`Processing category: ${match.category} with phrases:`, match.phrases);
     match.phrases.forEach(phrase => {
       const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-      const matches = text.match(regex);
-      if (matches) {
-        console.log(`Found matches for "${phrase}":`, matches);
-      }
-      
-      highlightedText = highlightedText.replace(regex, (matchedPhrase, offset) => {
-        const highlightId = `highlight-${match.category}-${highlights.length}`;
-        highlights.push({
-          id: highlightId,
-          phrase: matchedPhrase,
+      let regexMatch;
+      while ((regexMatch = regex.exec(text)) !== null) {
+        potentialMatches.push({
+          start: regexMatch.index,
+          end: regexMatch.index + regexMatch[0].length,
+          phrase: regexMatch[0],
           category: match.category
         });
-        console.log(`Created highlight: ${highlightId} for phrase: ${matchedPhrase}`);
-        return `<span class="phrase-highlight" id="${highlightId}" data-category="${match.category}">${matchedPhrase}</span>`;
-      });
+        console.log(`Found potential match: "${regexMatch[0]}" at ${regexMatch.index}-${regexMatch.index + regexMatch[0].length} for category ${match.category}`);
+      }
     });
   });
   
-  console.log(`Total highlights created: ${highlights.length}`);
+  // Sort matches by start position and resolve conflicts (longest match wins)
+  potentialMatches.sort((a, b) => a.start - b.start);
+  const finalMatches = [];
+  
+  potentialMatches.forEach(current => {
+    // Check if this match conflicts with any already accepted match
+    const hasConflict = finalMatches.some(accepted => 
+      (current.start < accepted.end && current.end > accepted.start)
+    );
+    
+    if (!hasConflict) {
+      finalMatches.push(current);
+    } else {
+      console.log(`Skipping conflicting match: "${current.phrase}" (${current.start}-${current.end})`);
+    }
+  });
+  
+  console.log(`Resolved ${potentialMatches.length} potential matches to ${finalMatches.length} final matches`);
+  
+  // Apply highlights in reverse order to maintain text positions
+  let highlightedText = text;
+  const highlights = [];
+  
+  finalMatches.reverse().forEach((match, index) => {
+    const highlightId = `highlight-${match.category}-${highlights.length}`;
+    highlights.push({
+      id: highlightId,
+      phrase: match.phrase,
+      category: match.category
+    });
+    
+    const before = highlightedText.substring(0, match.start);
+    const after = highlightedText.substring(match.end);
+    const spanHtml = `<span class="phrase-highlight" id="${highlightId}" data-category="${match.category}">${match.phrase}</span>`;
+    
+    highlightedText = before + spanHtml + after;
+    console.log(`Applied highlight: ${highlightId} for phrase: ${match.phrase}`);
+  });
+  
+  console.log(`Total highlights applied: ${highlights.length}`);
   return { highlightedText, highlights };
 }
 
@@ -893,14 +926,13 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   console.log('Updated global category scores:', globalCategoryScores);
   console.log('Updated global category matches:', globalCategoryMatches);
   
-  // Trigger score celebration for high-value scores
-  Object.entries(newScores).forEach(([category, score]) => {
-    console.log(`Checking score for ${category}: ${score}`);
-    if (score > 1) {
-      console.log(`Triggering celebration for ${category}: ${score}pts`);
-      showCategoryScoreCelebration(Math.round(score));
-    }
-  });
+  // Trigger single score celebration for total score from this selection
+  const totalNewScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
+  console.log(`Total score for this selection: ${totalNewScore}`);
+  if (totalNewScore > 1) {
+    console.log(`Triggering single celebration for total score: ${totalNewScore}pts`);
+    showCategoryScoreCelebration(Math.round(totalNewScore));
+  }
 }
 
 function showScoreCelebration(score, startX = null, startY = null) {
