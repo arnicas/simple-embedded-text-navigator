@@ -25,23 +25,23 @@
                 <h2>What's the Fairy Tale Text Hunt?</h2>
                 <div class="help-section">
                     <h3>📚 Explore Connected Stories</h3>
-                    <p>Select a text section to find similar passages from other public domain fairy tale texts &mdash; using an in-browser embedding index and search. There is no server! As you browse the story lines, watch for highlighted elements that fly into various categories and award you points, potentially. If you want to try to fill in various category buckets, you will want to select text that might "lead you" somewhere. Magical creatures are harder than you might think!</p>
+                    <p>Select a text section to find similar passages from other public domain fairy tale texts &mdash; using an in-browser embedding index and search. As you browse the story lines, watch for highlighted elements that fly into various categories and award you points, potentially. If you want to try to fill in various category buckets, you will want to select text that might "lead you" somewhere. Magical creatures are harder than you might think!</p>
                 </div>
                 <div class="help-section">
                     <h3>🎯 Category Buckets</h3>
-                    <p>Numbers show how many times each theme has appeared in your exploration, and how rare something is. Higher scores are given for rarer items. They were originally seeded by looking at top unigram and bigrams, then added to during use and weighted with Claude's help and some python code. I have no doubt missed many and will update as I play it. The icons were made with a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> that uses a Flux Lora for a medieval style and adds a label.</p>
+                    <p>Numbers show how many times each theme has appeared in your exploration, and how rare something is. Higher scores are given for rarer items. They were originally seeded by looking at top unigram and bigrams, then added to during use and weighted with Claude's help and some python code. I have no doubt missed many and am updating as I play it. The icons were made with a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> that uses a Flux Lora for a medieval style and adds a label.</p>
                 </div>
                 <div class="help-section">
                     <h3>Selection Similarity via Embeddings</h3>
-                    <p>The similarity score under the text shows how "similar" a new text is to what you selected. This app uses a tiny embedding model, <a href="https://huggingface.co/TaylorAI/bge-micro">bge-micro,</a> and Transformers.js. The index and similarity in the browser are handled with client-vector-search, a node package. The background color changes slightly depending on how high the similarity score is.</p>
+                    <p>The similarity score under the text shows how "similar" a new text is to what you selected. This app uses a tiny embedding model, <a href="https://huggingface.co/TaylorAI/bge-micro">bge-micro,</a> with <a href="https://huggingface.co/docs/transformers.js/en/index">Transformers.js</a> from Huggingface. The index and similarity in the browser are handled with client-vector-search, a node package. The background color changes slightly depending on how high the similarity score is.</p>
                 </div>
                 <div class="help-section">
-                    <h3>Text Source</h3>
-                    <p>The text is sourced from Project Gutenberg book fairy tales, processed into sentences and then classified for "descriptiveness" after training a small spaCy model. The dataset was later reduced quite a bit to a very few authors, for this demo app.</p>
+                    <h3>Text Sources and Caveats</h3>
+                    <p>The text is sourced from Project Gutenberg book fairy tales, processed into sentences and then classified for "descriptiveness" after training a small spaCy model. The dataset was later reduced quite a bit to a very few authors (4!), for this demo app. You can discover and get points for finding the sources, too. There may still be duplicate stories (depending on the book collection) and there may also be lines that contain offensive text (racism, sexism, gore) for today's readers.</p>
                 </div>
                 <div class="help-section">
-                    <h3>Who Made This, and More Info?</h3>
-                    <p>Not really a vibe coding thing, I've been messing with the core similarity stuff and dataset for a year now. But this was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tales content. I did get Claude's help to finish this version of the UI. Made by @arnicas/Lynn Cherny on <a href="https://x.com/arnicas">X</a>, <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, and the repo is at the badly named<a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>.</p>
+                    <h3>Who Made This, More Info?</h3>
+                    <p>I've been messing with the core browser similarity stuff and dataset for a year now. This was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tale content. I did get Claude's help to finish this version of the UI (it doesn't understand gsap animation very well). Made by <b></bold>@arnicas/Lynn Cherny</b> on <a href="https://x.com/arnicas">X</a>, <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, and the repo is at the badly named <a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>.</p>
                 </div>
             </div>
         </div>
@@ -98,14 +98,6 @@
                 </div>
                 <div id="categoryBuckets"></div>
             </div>
-            <!--
-            <div id="chartSection">
-                <div id="chartContainer" class="chart-container hidden">
-                    <div class="chart" id="scatterplot"></div>
-                </div>
-                <button id="toggleChart">Show map</button>
-            </div> 
-            -->
         </div> 
         
     </div>

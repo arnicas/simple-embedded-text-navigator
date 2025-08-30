@@ -177,7 +177,7 @@ body {
   color: #8b4513;
   text-align: center;
   white-space: nowrap;
-  background-color: #daa520e6;
+  background-color: #ffb6c1e6;
   border: 1px solid #b8860b4d;
   border-radius: clamp(8px, 1.5vw, 12px);
   min-width: clamp(28px, 4vw, 40px);
@@ -422,6 +422,21 @@ body {
 
 .score-celebration {
   color: #daa520;
+  text-shadow: 3px 3px 6px #0006;
+  pointer-events: none;
+  z-index: 2500;
+  opacity: 0;
+  font-family: Patrick Hand, cursive;
+  font-size: 48px;
+  font-weight: bold;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%)scale(.2);
+}
+
+.score-celebration-metadata {
+  color: #ff69b4;
   text-shadow: 3px 3px 6px #0006;
   pointer-events: none;
   z-index: 2500;

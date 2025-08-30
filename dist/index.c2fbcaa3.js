@@ -615,6 +615,21 @@ let word_scores = {};
 let currentResult = null; // Will be set to random quote on initialization
 let alreadySeen = [];
 let scores = {};
+// ===== METADATA DISCOVERY SCORING CONFIGURATION =====
+// These values can be easily modified to adjust scoring for new discoveries
+// Points are awarded when users find new content through text selection
+const METADATA_DISCOVERY_SCORES = {
+    NEW_AUTHOR: 7,
+    NEW_BOOK: 5,
+    NEW_STORY: 3 // Points for discovering a new story
+};
+// How it works:
+// - Initial screen loading doesn't count for scoring (isInitialLoad = true)
+// - After first load, each unique author/book/story discovery triggers score celebration
+// - Scoring happens in trackMetadata() function when relatedItemObject contains new metadata
+// - Multiple discoveries in one selection stack (e.g., new book + new author = 5+7 = 12 pts)
+// Track if this is the initial load to avoid scoring the starting quote
+let isInitialLoad = true;
 // Global category counters that persist across sessions
 let globalCategoryCounts = {};
 let globalCategoryScores = {};
@@ -686,14 +701,14 @@ function countDatasetMetadata() {
     totalMetadataCounts.authors = datasetAuthors.size;
     totalMetadataCounts.books = datasetBooks.size;
     totalMetadataCounts.stories = datasetStories.size;
-    console.log('Dataset metadata counts:');
-    console.log(`- Authors: ${totalMetadataCounts.authors} unique`);
-    console.log(`- Books: ${totalMetadataCounts.books} unique`);
-    console.log(`- Stories: ${totalMetadataCounts.stories} unique`);
-    // Log some examples
-    console.log('Sample authors:', Array.from(datasetAuthors).slice(0, 5));
-    console.log('Sample books:', Array.from(datasetBooks).slice(0, 5));
-    console.log('Sample stories:', Array.from(datasetStories).slice(0, 5));
+    // console.log('Dataset metadata counts:');
+    // console.log(`- Authors: ${totalMetadataCounts.authors} unique`);
+    // console.log(`- Books: ${totalMetadataCounts.books} unique`);
+    // console.log(`- Stories: ${totalMetadataCounts.stories} unique`);
+    // // Log some examples
+    // console.log('Sample authors:', Array.from(datasetAuthors).slice(0, 5));
+    // console.log('Sample books:', Array.from(datasetBooks).slice(0, 5));
+    // console.log('Sample stories:', Array.from(datasetStories).slice(0, 5));
     return totalMetadataCounts;
 }
 function setRandomStartingQuote() {
@@ -1071,7 +1086,9 @@ function showTotalModal(imageSrc) {
     modalImage.alt = 'total';
     modalImage.style.display = 'block';
     // Calculate totals
-    const totalPoints = Object.values(globalCategoryScores).reduce((sum, score)=>sum + score, 0);
+    const categoryPoints = Object.values(globalCategoryScores).reduce((sum, score)=>sum + score, 0);
+    const metadataPoints = globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR + globalMetadataCounts.books * METADATA_DISCOVERY_SCORES.NEW_BOOK + globalMetadataCounts.stories * METADATA_DISCOVERY_SCORES.NEW_STORY;
+    const totalPoints = categoryPoints + metadataPoints;
     const totalItems = Object.values(globalCategoryCounts).reduce((sum, count)=>sum + count, 0);
     const metadataTotal = Object.values(globalMetadataCounts).reduce((sum, count)=>sum + count, 0);
     const grandTotalItems = totalItems + metadataTotal;
@@ -1079,6 +1096,7 @@ function showTotalModal(imageSrc) {
     modalTitle.textContent = `Total Progress: ${Math.round(totalPoints)} Points`;
     modalCount.style.display = 'none';
     // Set content showing breakdown
+    // Lynn: I don't love how claude did this inline.
     modalMatches.innerHTML = `
     <div style="text-align: center; font-family: 'Patrick Hand', cursive;">
       <h3 style="color: #8B4513; margin-bottom: 15px;">Your Exploration Summary</h3>
@@ -1087,11 +1105,35 @@ function showTotalModal(imageSrc) {
         <p style="font-size: 16px; font-weight: bold; color: #2d1810; margin: 5px 0;">
           \u{1F3C6} Total Score: ${Math.round(totalPoints)} Points
         </p>
+        <div style="display: flex; justify-content: space-between; margin: 10px 0; padding: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;">
+          <span style="font-size: 14px; color: #555;">\u{1F4CA} Category Points:</span>
+          <span style="font-weight: bold; color: #2d1810;">${Math.round(categoryPoints)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin: 10px 0; padding: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;">
+          <span style="font-size: 14px; color: #555;">\u{1F4DA} Source Points:</span>
+          <span style="font-weight: bold; color: #2d1810;">${Math.round(metadataPoints)}</span>
+        </div>
+      </div>
+      
+      <div style="background: rgba(144, 238, 144, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <h4 style="color: #228B22; margin-bottom: 10px;">\u{1F4DA} The Sources</h4>
+        <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+          <span style="font-size: 14px; color: #555;">\u{270D}\u{FE0F} Authors (${METADATA_DISCOVERY_SCORES.NEW_AUTHOR}pts each):</span>
+          <span style="font-weight: bold; color: #228B22;">${globalMetadataCounts.authors}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+          <span style="font-size: 14px; color: #555;">\u{1F4D6} Books (${METADATA_DISCOVERY_SCORES.NEW_BOOK}pts each):</span>
+          <span style="font-weight: bold; color: #228B22;">${globalMetadataCounts.books}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+          <span style="font-size: 14px; color: #555;">\u{1F4DC} Stories (${METADATA_DISCOVERY_SCORES.NEW_STORY}pts each):</span>
+          <span style="font-weight: bold; color: #228B22;">${globalMetadataCounts.stories}</span>
+        </div>
+      </div>
+      
+      <div style="background: rgba(135, 206, 235, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
         <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          \u{1F4CA} Category Items: ${totalItems}
-        </p>
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          \u{1F4DA} Unique Text Items: ${metadataTotal}
+          \u{1F4CA} Category Items Found: ${totalItems}
         </p>
         <p style="font-size: 14px; color: #555; margin: 5px 0;">
           \u{1F3AF} Total Items Found: ${grandTotalItems}
@@ -1099,7 +1141,7 @@ function showTotalModal(imageSrc) {
       </div>
       
       <p style="font-size: 12px; color: #666; font-style: italic;">
-        Keep exploring to discover more quotes and raise your score of unusual texts!
+        Keep exploring to discover more quotes and sources and raise your score of unusual texts!
       </p>
     </div>
   `;
@@ -1272,16 +1314,22 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
         console.log(`Checking score for ${category}: ${score}`);
         if (score > 1) {
             console.log(`Triggering celebration for ${category}: ${score}pts`);
-            showScoreCelebration(Math.round(score));
+            showCategoryScoreCelebration(Math.round(score));
         }
     });
 }
-function showScoreCelebration(score) {
+function showScoreCelebration(score, startX = null, startY = null) {
     console.log(`Creating score celebration for ${score} points`);
     // Create score celebration element
     const scoreElement = document.createElement('div');
     scoreElement.className = 'score-celebration';
     scoreElement.textContent = `+${score}!`;
+    // Set starting position - default to center if not specified
+    if (startX !== null && startY !== null) {
+        scoreElement.style.left = startX + 'px';
+        scoreElement.style.top = startY + 'px';
+        scoreElement.style.transform = 'translate(-50%, -50%) scale(0.2)'; // Center on the point
+    }
     // Add to document
     document.body.appendChild(scoreElement);
     // Generate random fly-off direction
@@ -1345,8 +1393,103 @@ function showScoreCelebration(score) {
     });
     console.log(`Score celebration: +${score}pts flying to ${randomDirection.x}, ${randomDirection.y}`);
 }
+// Specialized celebration functions with origin points
+function showCategoryScoreCelebration(score) {
+    // Start celebration from the text box area
+    const textElement = document.getElementById('text');
+    if (textElement) {
+        const rect = textElement.getBoundingClientRect();
+        const startX = rect.left + rect.width / 2;
+        const startY = rect.top + rect.height / 2;
+        showScoreCelebration(score, startX, startY);
+        console.log(`Category score celebration started from text area (${Math.round(startX)}, ${Math.round(startY)})`);
+    } else // Fallback to default center position
+    showScoreCelebration(score);
+}
+function showMetadataScoreCelebration(score) {
+    // Start celebration from the metadata buckets area
+    const metadataBuckets = document.getElementById('metadataBuckets');
+    if (metadataBuckets) {
+        const rect = metadataBuckets.getBoundingClientRect();
+        const startX = rect.left + rect.width / 2;
+        const startY = rect.top + rect.height / 2;
+        showMetadataScoreCelebrationWithPink(score, startX, startY);
+        console.log(`Metadata score celebration started from metadata area (${Math.round(startX)}, ${Math.round(startY)})`);
+    } else // Fallback to default center position
+    showMetadataScoreCelebrationWithPink(score);
+}
+function showMetadataScoreCelebrationWithPink(score, startX = null, startY = null) {
+    console.log(`Creating pink metadata score celebration for ${score} points`);
+    // Create score celebration element with pink styling
+    const scoreElement = document.createElement('div');
+    scoreElement.className = 'score-celebration-metadata';
+    scoreElement.textContent = `+${score}!`;
+    // Set starting position - default to center if not specified
+    if (startX !== null && startY !== null) {
+        scoreElement.style.left = startX + 'px';
+        scoreElement.style.top = startY + 'px';
+        scoreElement.style.transform = 'translate(-50%, -50%) scale(0.2)'; // Center on the point
+    }
+    // Add to document
+    document.body.appendChild(scoreElement);
+    // Generate random fly-off direction
+    const directions = [
+        {
+            x: -window.innerWidth,
+            y: -window.innerHeight
+        },
+        {
+            x: window.innerWidth,
+            y: -window.innerHeight
+        },
+        {
+            x: -window.innerWidth,
+            y: window.innerHeight
+        },
+        {
+            x: window.innerWidth,
+            y: window.innerHeight
+        },
+        {
+            x: 0,
+            y: -window.innerHeight * 1.5
+        },
+        {
+            x: -window.innerWidth * 1.5,
+            y: 0
+        },
+        {
+            x: window.innerWidth * 1.5,
+            y: 0
+        } // Straight right
+    ];
+    const randomDirection = directions[Math.floor(Math.random() * directions.length)];
+    // GSAP animation sequence (same as regular celebrations)
+    const tl = (0, _gsap.gsap).timeline({
+        onComplete: ()=>{
+            if (scoreElement && scoreElement.parentNode) scoreElement.parentNode.removeChild(scoreElement);
+        }
+    });
+    tl.to(scoreElement, {
+        duration: 0.3,
+        scale: 2.2,
+        opacity: 1,
+        ease: "back.out(1.7)"
+    }).to(scoreElement, {
+        duration: 0.4,
+        scale: 1.8,
+        ease: "power2.out"
+    }).to(scoreElement, {
+        duration: 1.2,
+        x: randomDirection.x,
+        y: randomDirection.y,
+        opacity: 0,
+        scale: 0.5,
+        ease: "power2.in"
+    });
+}
 function cleanupTextContent() {
-    // Safety function to remove highlight styling but keep text visible
+    // Safety function to completely remove HTML spans and restore clean text
     const textElement = document.getElementById('text');
     const animationElement = document.getElementById('animation');
     [
@@ -1354,17 +1497,14 @@ function cleanupTextContent() {
         animationElement
     ].forEach((element)=>{
         if (element) {
-            // Find any remaining phrase-highlight spans and remove styling but keep text
+            // Check if there are any highlight spans
             const highlights = element.querySelectorAll('.phrase-highlight');
-            highlights.forEach((highlight)=>{
-                highlight.style.background = 'transparent';
-                highlight.style.border = 'none';
-                highlight.style.boxShadow = 'none';
-                highlight.style.borderRadius = '0';
-                highlight.style.padding = '0';
-                highlight.style.opacity = '1'; // Keep text fully visible
-            });
-            if (highlights.length > 0) console.log(`Removed styling from ${highlights.length} remaining highlights but kept text visible`);
+            if (highlights.length > 0) {
+                console.log(`Cleaning up ${highlights.length} highlight spans by restoring plain text`);
+                // Get clean text content without HTML markup and restore it
+                const cleanText = element.textContent || element.innerText;
+                element.innerHTML = (0, _effectsJs.formattedContent)(cleanText);
+            }
         }
     });
 }
@@ -1398,10 +1538,12 @@ function updateMetadataCountsDisplay() {
         console.log(`Updating ${metadataType}: discovered=${discovered}, total=${total}, element exists=${!!countElement}`);
         if (countElement) {
             if (discovered > 0) {
-                // Show discovered/total format
-                countElement.textContent = `${discovered}/${total}`;
+                // Show discovered/total format with checkmark if completed
+                const isComplete = discovered === total;
+                const checkmark = isComplete ? " \u2713" : '';
+                countElement.textContent = `${discovered}/${total}${checkmark}`;
                 countElement.style.display = 'inline';
-                console.log(`Set ${metadataType} display to: ${discovered}/${total}`);
+                console.log(`Set ${metadataType} display to: ${discovered}/${total}${checkmark} (complete: ${isComplete})`);
             } else countElement.style.display = 'none';
         }
     });
@@ -1529,8 +1671,8 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
         };
         (0, _gsap.gsap).delayedCall(2, ()=>{
             const textElement = document.getElementById('text');
-            // Preserve HTML content, but get clean text for processing
-            const currentText = textElement.innerHTML.includes('<span') ? textElement.textContent || textElement.innerText : textElement.textContent || textElement.innerText;
+            // Get clean text for processing, stripping any existing HTML spans
+            const currentText = textElement.textContent || textElement.innerText;
             console.log('Current text for animation:', currentText);
             const { highlightedText, highlights } = highlightPhrasesInText(currentText, foundCategories);
             console.log('Highlights found:', highlights);
@@ -1546,6 +1688,8 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
                         incrementCategoryCounts(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
                         updateCategoryCountsDisplay();
                         activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
+                        // Process any pending metadata celebrations after word celebrations complete
+                        calculateAndCelebrateMetadataScore();
                         // Clean up any remaining HTML markup
                         cleanupTextContent();
                         // Reorder buckets based on updated counts after a short delay
@@ -1670,27 +1814,63 @@ function replaceRelatedInfo(relatedItemObject) {
     updateBackgroundForScore(relatedItemObject.score);
 }
 function trackMetadata(relatedItemObject) {
-    // Track unique authors, books, and stories
+    // Track unique authors, books, and stories AND store discoveries for later celebration
     let metadataUpdated = false;
+    // Check for new author discovery
     if (relatedItemObject.author && relatedItemObject.author !== "None" && !uniqueAuthors.has(relatedItemObject.author)) {
         uniqueAuthors.add(relatedItemObject.author);
         globalMetadataCounts.authors = uniqueAuthors.size;
         metadataUpdated = true;
-    // console.log(`New author found: ${relatedItemObject.author}`);
+        if (!isInitialLoad) {
+            pendingMetadataDiscoveries.newAuthor = relatedItemObject.author;
+            pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_AUTHOR;
+            console.log(`NEW AUTHOR DISCOVERED: ${relatedItemObject.author} (scoring deferred)`);
+        }
     }
+    // Check for new book discovery  
     if (relatedItemObject.title && !uniqueBooks.has(relatedItemObject.title)) {
         uniqueBooks.add(relatedItemObject.title);
         globalMetadataCounts.books = uniqueBooks.size;
         metadataUpdated = true;
-    //console.log(`New book found: ${relatedItemObject.title}`);
+        if (!isInitialLoad) {
+            pendingMetadataDiscoveries.newBook = relatedItemObject.title;
+            pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_BOOK;
+            console.log(`NEW BOOK DISCOVERED: ${relatedItemObject.title} (scoring deferred)`);
+        }
     }
+    // Check for new story discovery
     if (relatedItemObject.story_title && relatedItemObject.story_title !== "None" && relatedItemObject.story_title !== "" && !uniqueStories.has(relatedItemObject.story_title)) {
         uniqueStories.add(relatedItemObject.story_title);
         globalMetadataCounts.stories = uniqueStories.size;
         metadataUpdated = true;
-    // console.log(`New story found: ${relatedItemObject.story_title}`);
+        if (!isInitialLoad) {
+            pendingMetadataDiscoveries.newStory = relatedItemObject.story_title;
+            pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_STORY;
+            console.log(`NEW STORY DISCOVERED: ${relatedItemObject.story_title} (scoring deferred)`);
+        }
     }
     if (metadataUpdated) updateMetadataCountsDisplay();
+}
+// Store the newly discovered metadata for later celebration
+let pendingMetadataDiscoveries = {
+    newAuthor: null,
+    newBook: null,
+    newStory: null,
+    totalPoints: 0
+};
+function calculateAndCelebrateMetadataScore() {
+    // Celebrate the pending metadata discoveries
+    if (pendingMetadataDiscoveries.totalPoints > 0 && !isInitialLoad) {
+        console.log(`Celebrating deferred metadata discoveries: +${pendingMetadataDiscoveries.totalPoints} pts`);
+        showMetadataScoreCelebration(pendingMetadataDiscoveries.totalPoints);
+    }
+    // Reset pending discoveries
+    pendingMetadataDiscoveries = {
+        newAuthor: null,
+        newBook: null,
+        newStory: null,
+        totalPoints: 0
+    };
 }
 function highlightText(textElement) {
     const selection = window.getSelection();
@@ -1775,6 +1955,8 @@ async function initialize() {
         updateMetadataCountsDisplay();
         // Set random starting quote
         setRandomStartingQuote();
+        // Mark initial load as complete to enable scoring for subsequent discoveries
+        isInitialLoad = false;
         hideLoading(); // Hide loading after initialization is complete
     } catch (error) {
         console.error('Initialization failed:', error);
