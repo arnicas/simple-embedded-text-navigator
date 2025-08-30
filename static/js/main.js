@@ -929,9 +929,18 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   // Trigger single score celebration for total score from this selection
   const totalNewScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
   console.log(`Total score for this selection: ${totalNewScore}`);
-  if (totalNewScore > 1) {
-    console.log(`Triggering single celebration for total score: ${totalNewScore}pts`);
-    showCategoryScoreCelebration(Math.round(totalNewScore));
+  
+  // Store the total score to be celebrated later, don't celebrate immediately
+  // This prevents multiple celebrations if this function is called multiple times
+  window.pendingCategoryScore = (window.pendingCategoryScore || 0) + totalNewScore;
+}
+
+function triggerPendingCategoryCelebration() {
+  // Trigger celebration for accumulated category scores
+  if (window.pendingCategoryScore && window.pendingCategoryScore > 1) {
+    console.log(`Triggering accumulated category celebration: ${window.pendingCategoryScore}pts`);
+    showCategoryScoreCelebration(Math.round(window.pendingCategoryScore));
+    window.pendingCategoryScore = 0; // Reset after celebrating
   }
 }
 
@@ -1336,11 +1345,23 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
       console.log('Highlights found:', highlights);
       
       if (highlights.length > 0) {
-        // Temporarily update text with highlights
-        textElement.innerHTML = highlightedText;
-        
-        // Start animation after highlights are in place
-        gsap.delayedCall(0.3, () => {
+        // Fade out text, update with highlights, then fade back in
+        gsap.to(textElement, {
+          duration: 0.05,
+          opacity: 0,
+          ease: "power2.out",
+          onComplete: () => {
+            // Update text with highlights while invisible
+            textElement.innerHTML = highlightedText;
+            
+            // Fade back in with highlights in place
+            gsap.to(textElement, {
+              duration: 0.5,
+              opacity: 1,
+              ease: "power2.in",
+              onComplete: () => {
+                // Start animation after highlights are in place and visible
+                gsap.delayedCall(0.3, () => {
           console.log('Starting phrase animation');
           animatePhrasesToBuckets(highlights, () => {
             // NOW increment counters and trigger score celebrations after animations complete
@@ -1348,6 +1369,9 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
             incrementCategoryCounts(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
             updateCategoryCountsDisplay();
             activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
+            
+            // Trigger any accumulated category score celebration
+            triggerPendingCategoryCelebration();
             
             // Process any pending metadata celebrations after word celebrations complete
             calculateAndCelebrateMetadataScore();
@@ -1359,8 +1383,15 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
             gsap.delayedCall(0.5, () => {
               reorderCategoryBuckets();
             });
-          });
-        });
+                  }); // animatePhrasesToBuckets callback
+                }); // gsap.delayedCall callback  
+              } // onComplete for fade in
+            }); // gsap.to fade in
+          } // onComplete for fade out
+        }); // gsap.to fade out
+      } else {
+        // No highlights found, ensure text is visible
+        console.log('No highlights found, text remains visible without changes');
       }
     });
   } 
