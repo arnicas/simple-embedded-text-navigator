@@ -448,3 +448,94 @@ export function showLoading() {
 export function hideLoading() {
   document.getElementById('loading').style.display = 'none';
 }
+
+export function performBucketReorder() {
+  const bucketContainer = document.getElementById('categoryBuckets');
+  if (!bucketContainer) return;
+
+  // Get all bucket elements
+  const buckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
+
+  // Sort buckets by score (highest first), then count (highest first), then alphabetically
+  buckets.sort((a, b) => {
+    const categoryA = a.id.replace('bucket-', '');
+    const categoryB = b.id.replace('bucket-', '');
+
+    const scoreA = getGlobalCategoryScore(categoryA) || 0;
+    const scoreB = getGlobalCategoryScore(categoryB) || 0;
+    const countA = getGlobalCategoryCount(categoryA) || 0;
+    const countB = getGlobalCategoryCount(categoryB) || 0;
+
+    // Primary sort: by score (descending)
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA;
+    }
+
+    // Secondary sort: by count (descending) for score ties
+    if (countB !== countA) {
+      return countB - countA;
+    }
+
+    // Tertiary sort: alphabetically (ascending) for ties
+    return categoryA.localeCompare(categoryB);
+  });
+
+  // Check if reordering is actually needed
+  const currentOrder = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
+  const needsReorder = buckets.some((bucket, index) => bucket !== currentOrder[index]);
+
+  if (!needsReorder) {
+    console.log('Buckets already in correct order, skipping animation');
+    return;
+  }
+
+  // Use a fade-based reordering animation
+  // First, fade out all buckets
+  gsap.to(buckets, {
+    opacity: 0.3,
+    duration: 0.2,
+    ease: "power1.out"
+  });
+
+  // Reorder DOM elements while faded
+  buckets.forEach((bucket) => {
+    bucketContainer.appendChild(bucket);
+  });
+
+  // Fade back in with a slight stagger
+  gsap.to(buckets, {
+    opacity: 1,
+    duration: 0.3,
+    ease: "power1.out",
+    delay: 0.2,
+    stagger: 0.02
+  });
+
+  console.log('Category buckets reordered by score then count:',
+    buckets.map(b => {
+      const category = b.id.replace('bucket-', '');
+      const count = getGlobalCategoryCount(category) || 0;
+      const score = Math.round(getGlobalCategoryScore(category) || 0);
+      return `${category}: ${count} items (${score}pts)`;
+    })
+  );
+}
+
+// ===== GLOBAL CATEGORY DATA MANAGEMENT =====
+
+// These will need to be set by main.js when initializing
+let globalCategoryCounts = {};
+let globalCategoryScores = {};
+
+export function setGlobalCategoryData(counts, scores) {
+  globalCategoryCounts = counts || {};
+  globalCategoryScores = scores || {};
+}
+
+function getGlobalCategoryCount(category) {
+  return globalCategoryCounts[category] || 0;
+}
+
+function getGlobalCategoryScore(category) {
+  return globalCategoryScores[category] || 0;
+}

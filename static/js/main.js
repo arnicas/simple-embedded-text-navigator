@@ -16,7 +16,9 @@ import {
   updateBackgroundForScore,
   cleanupTextContent,
   showLoading,
-  hideLoading
+  hideLoading,
+  performBucketReorder,
+  setGlobalCategoryData
 } from './effects.js';
 
 
@@ -817,6 +819,9 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   console.log('Updated global category counts:', globalCategoryCounts);
   console.log('Updated global category scores:', globalCategoryScores);
   console.log('Updated global category matches:', globalCategoryMatches);
+
+  // Update effects.js with latest category data for bucket reordering
+  setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
   
   // Trigger single score celebration for total score from this selection
   const totalNewScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
@@ -916,77 +921,7 @@ function reorderCategoryBuckets() {
   }, 1000);
 }
 
-function performBucketReorder() {
-  const bucketContainer = document.getElementById('categoryBuckets');
-  if (!bucketContainer) return;
-  
-  // Get all bucket elements
-  const buckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
-  
-  // Sort buckets by score (highest first), then count (highest first), then alphabetically
-  buckets.sort((a, b) => {
-    const categoryA = a.id.replace('bucket-', '');
-    const categoryB = b.id.replace('bucket-', '');
-    
-    const scoreA = globalCategoryScores[categoryA] || 0;
-    const scoreB = globalCategoryScores[categoryB] || 0;
-    const countA = globalCategoryCounts[categoryA] || 0;
-    const countB = globalCategoryCounts[categoryB] || 0;
-    
-    // Primary sort: by score (descending)
-    if (scoreB !== scoreA) {
-      return scoreB - scoreA;
-    }
-    
-    // Secondary sort: by count (descending) for score ties
-    if (countB !== countA) {
-      return countB - countA;
-    }
-    
-    // Tertiary sort: alphabetically (ascending) for ties
-    return categoryA.localeCompare(categoryB);
-  });
-  
-  // Check if reordering is actually needed
-  const currentOrder = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
-  const needsReorder = buckets.some((bucket, index) => bucket !== currentOrder[index]);
-  
-  if (!needsReorder) {
-    console.log('Buckets already in correct order, skipping animation');
-    return;
-  }
-  
-  // Use a simpler fade-based reordering instead of position-based
-  // First, fade out all buckets
-  gsap.to(buckets, {
-    opacity: 0.3,
-    duration: 0.2,
-    ease: "power1.out"
-  });
-  
-  // Reorder DOM elements while faded
-  buckets.forEach((bucket) => {
-    bucketContainer.appendChild(bucket);
-  });
-  
-  // Fade back in with a slight stagger
-  gsap.to(buckets, {
-    opacity: 1,
-    duration: 0.3,
-    ease: "power1.out",
-    delay: 0.2,
-    stagger: 0.02
-  });
-  
-  console.log('Category buckets reordered by score then count:', 
-    buckets.map(b => {
-      const category = b.id.replace('bucket-', '');
-      const count = globalCategoryCounts[category] || 0;
-      const score = Math.round(globalCategoryScores[category] || 0);
-      return `${category}: ${count} items (${score}pts)`;
-    })
-  );
-}
+// performBucketReorder function is now imported from effects.js
 
 function activateCategoryBuckets(selectedCategories, foundCategories) {
   // Activate buckets for selected text categories
@@ -1500,6 +1435,8 @@ async function initialize() {
       
       // Initialize global category counters
       initializeGlobalCounts();
+      // Share global category data with effects.js for bucket reordering
+      setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
       updateCategoryCountsDisplay();
       updateMetadataCountsDisplay();
       
