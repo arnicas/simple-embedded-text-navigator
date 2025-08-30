@@ -21,6 +21,12 @@ import { initializeModel, getEmbedding, EmbeddingIndex } from 'client-vector-sea
 import { env } from '@xenova/transformers';
 ```
 
+### Crucial Path Setting for Model
+
+```
+env.localModelPath = './site-data/cache';
+```
+
 ### Your init:
 
 ```
@@ -80,7 +86,11 @@ If there is interest, I could add a skeleton version that doesn't have all the U
 `npm run build` (makes dist folder)
 
 `npm run start`
+ 
 
+## Updating the Words that Match
+
+You can edit the file in static/site-data/category-words.json.  Then run the python script `python/word-scores-standalone.py` in the python folder to update the scores.json files. It has paths set to the static/site-data folder.
 
 ## Deployment 
 

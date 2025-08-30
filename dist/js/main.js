@@ -5,7 +5,19 @@ import SplitType from 'split-type';
 // import gsap text plugin
 import { TextPlugin } from 'gsap/TextPlugin';
 gsap.registerPlugin(TextPlugin);
-import { randomY, formattedContent } from './effects.js';
+import {
+  randomY,
+  formattedContent,
+  showScoreCelebration,
+  showCategoryScoreCelebration,
+  showMetadataScoreCelebration,
+  showMetadataScoreCelebrationWithPink,
+  animatePhrasesToBuckets,
+  updateBackgroundForScore,
+  cleanupTextContent,
+  showLoading,
+  hideLoading
+} from './effects.js';
 
 
 env.localModelPath = './site-data/cache';
@@ -71,14 +83,7 @@ let totalMetadataCounts = {
 
 
 
-function showLoading() {
-  document.getElementById('loading').style.display = 'flex';
-}
-
-// Function to hide the loading div
-function hideLoading() {
-  document.getElementById('loading').style.display = 'none';
-}
+// showLoading and hideLoading functions are now imported from effects.js
 
 
 async function createIndex() {
@@ -751,109 +756,7 @@ function highlightPhrasesInText(text, categories) {
   return { highlightedText, highlights };
 }
 
-function animatePhrasesToBuckets(highlights, onComplete) {
-  console.log('animatePhrasesToBuckets called with highlights:', highlights);
-  
-  if (highlights.length === 0) {
-    if (onComplete) onComplete();
-    return;
-  }
-  
-  let completedAnimations = 0;
-  const totalAnimations = highlights.length;
-  
-  highlights.forEach((highlight, index) => {
-    // Small delay for staggered effect
-    gsap.delayedCall(index * 0.2, () => {
-      const phraseElement = document.getElementById(highlight.id);
-      const bucket = document.getElementById(`bucket-${highlight.category}`);
-      
-      console.log(`Animating highlight ${highlight.id}:`, {
-        phraseElement: !!phraseElement,
-        bucket: !!bucket,
-        category: highlight.category
-      });
-      
-      if (!phraseElement || !bucket) {
-        console.log('Missing elements for animation:', {
-          phraseElement: !!phraseElement,
-          bucket: !!bucket,
-          highlightId: highlight.id,
-          bucketId: `bucket-${highlight.category}`
-        });
-        
-        // Count this as completed even if failed
-        completedAnimations++;
-        if (completedAnimations === totalAnimations && onComplete) {
-          onComplete();
-        }
-        return;
-      }
-      
-      // Get positions
-      const phraseRect = phraseElement.getBoundingClientRect();
-      const bucketRect = bucket.getBoundingClientRect();
-      
-      // Create clone for animation
-      const clone = phraseElement.cloneNode(true);
-      clone.id = `${highlight.id}-clone`;
-      clone.style.position = 'fixed';
-      clone.style.left = phraseRect.left + 'px';
-      clone.style.top = phraseRect.top + 'px';
-      clone.style.width = phraseRect.width + 'px';
-      clone.style.height = phraseRect.height + 'px';
-      clone.style.zIndex = '1000';
-      clone.style.pointerEvents = 'none';
-      clone.style.background = 'radial-gradient(ellipse at 30% 40%, rgba(218, 165, 32, 0.4) 0%, transparent 60%), linear-gradient(135deg, rgba(240, 230, 140, 0.3) 0%, rgba(218, 165, 32, 0.25) 100%)';
-      clone.style.borderRadius = '3px';
-      clone.style.padding = '2px';
-      
-      document.body.appendChild(clone);
-      
-      // Light up the target bucket
-      bucket.classList.add('receiving');
-      
-      // Animate clone to bucket
-      gsap.to(clone, {
-        x: bucketRect.left + bucketRect.width/2 - phraseRect.left - phraseRect.width/2,
-        y: bucketRect.top + bucketRect.height/2 - phraseRect.top - phraseRect.height/2,
-        scale: 0.3,
-        opacity: 0,
-        duration: 1.2,
-        ease: "power2.out",
-        onComplete: () => {
-          // Clean up clone
-          document.body.removeChild(clone);
-          bucket.classList.remove('receiving');
-          
-          // Track completion
-          completedAnimations++;
-          if (completedAnimations === totalAnimations && onComplete) {
-            console.log('All animations completed, calling onComplete callback');
-            onComplete();
-          }
-        }
-      });
-      
-      // Fade original phrase highlight styling but keep text visible
-      gsap.to(phraseElement, {
-        backgroundColor: 'transparent',
-        duration: 1.0,
-        delay: 0.5,
-        onComplete: () => {
-          // Remove all highlight styling but keep text visible
-          phraseElement.style.background = 'transparent';
-          phraseElement.style.border = 'none';
-          phraseElement.style.boxShadow = 'none';
-          phraseElement.style.borderRadius = '0';
-          phraseElement.style.padding = '0';
-          phraseElement.style.opacity = '1'; // Keep text fully visible
-          console.log('Removed all highlight styling but kept text visible');
-        }
-      });
-    });
-  });
-}
+// animatePhrasesToBuckets function is now imported from effects.js
 
 function initializeGlobalCounts() {
   // Initialize global counters, scores and matches for all categories
@@ -933,185 +836,9 @@ function triggerPendingCategoryCelebration() {
   }
 }
 
-function showScoreCelebration(score, startX = null, startY = null) {
-  console.log(`Creating score celebration for ${score} points`);
-  
-  // Create score celebration element
-  const scoreElement = document.createElement('div');
-  scoreElement.className = 'score-celebration';
-  scoreElement.textContent = `+${score}!`;
-  
-  // Set starting position - default to center if not specified
-  if (startX !== null && startY !== null) {
-    scoreElement.style.left = startX + 'px';
-    scoreElement.style.top = startY + 'px';
-    scoreElement.style.transform = 'translate(-50%, -50%) scale(0.2)'; // Center on the point
-  }
-  
-  // Add to document
-  document.body.appendChild(scoreElement);
-  
-  // Generate random fly-off direction
-  const directions = [
-    { x: -window.innerWidth, y: -window.innerHeight },  // Top-left
-    { x: window.innerWidth, y: -window.innerHeight },   // Top-right
-    { x: -window.innerWidth, y: window.innerHeight },   // Bottom-left
-    { x: window.innerWidth, y: window.innerHeight },    // Bottom-right
-    { x: 0, y: -window.innerHeight * 1.5 },             // Straight up
-    { x: -window.innerWidth * 1.5, y: 0 },              // Straight left
-    { x: window.innerWidth * 1.5, y: 0 }                // Straight right
-  ];
-  
-  const randomDirection = directions[Math.floor(Math.random() * directions.length)];
-  
-  // GSAP animation sequence
-  const tl = gsap.timeline({
-    onComplete: () => {
-      if (scoreElement && scoreElement.parentNode) {
-        scoreElement.parentNode.removeChild(scoreElement);
-      }
-    }
-  });
-  
-  tl.to(scoreElement, {
-    opacity: 1,
-    scale: 2.2,
-    duration: 0.3,
-    ease: "back.out(1.7)"
-  })
-  .to(scoreElement, {
-    scale: 1.8,
-    duration: 0.2,
-    ease: "power2.out"
-  })
-  .to(scoreElement, {
-    scale: 1.0,
-    duration: 0.3,
-    ease: "power1.out"
-  })
-  .to(scoreElement, {
-    x: randomDirection.x,
-    y: randomDirection.y,
-    opacity: 0,
-    scale: 0.5,
-    duration: 1.2,
-    ease: "power2.in"
-  });
-  
-  console.log(`Score celebration: +${score}pts flying to ${randomDirection.x}, ${randomDirection.y}`);
-}
+// Score celebration functions are now imported from effects.js
 
-// Specialized celebration functions with origin points
-
-function showCategoryScoreCelebration(score) {
-  // Start celebration from the text box area
-  const textElement = document.getElementById('text');
-  if (textElement) {
-    const rect = textElement.getBoundingClientRect();
-    const startX = rect.left + (rect.width / 2);
-    const startY = rect.top + (rect.height / 2);
-    showScoreCelebration(score, startX, startY);
-    console.log(`Category score celebration started from text area (${Math.round(startX)}, ${Math.round(startY)})`);
-  } else {
-    // Fallback to default center position
-    showScoreCelebration(score);
-  }
-}
-
-function showMetadataScoreCelebration(score) {
-  // Start celebration from the metadata buckets area
-  const metadataBuckets = document.getElementById('metadataBuckets');
-  if (metadataBuckets) {
-    const rect = metadataBuckets.getBoundingClientRect();
-    const startX = rect.left + (rect.width / 2);
-    const startY = rect.top + (rect.height / 2);
-    showMetadataScoreCelebrationWithPink(score, startX, startY);
-    console.log(`Metadata score celebration started from metadata area (${Math.round(startX)}, ${Math.round(startY)})`);
-  } else {
-    // Fallback to default center position
-    showMetadataScoreCelebrationWithPink(score);
-  }
-}
-
-function showMetadataScoreCelebrationWithPink(score, startX = null, startY = null) {
-  console.log(`Creating pink metadata score celebration for ${score} points`);
-  
-  // Create score celebration element with pink styling
-  const scoreElement = document.createElement('div');
-  scoreElement.className = 'score-celebration-metadata';
-  scoreElement.textContent = `+${score}!`;
-  
-  // Set starting position - default to center if not specified
-  if (startX !== null && startY !== null) {
-    scoreElement.style.left = startX + 'px';
-    scoreElement.style.top = startY + 'px';
-    scoreElement.style.transform = 'translate(-50%, -50%) scale(0.2)'; // Center on the point
-  }
-  
-  // Add to document
-  document.body.appendChild(scoreElement);
-  
-  // Generate random fly-off direction
-  const directions = [
-    { x: -window.innerWidth, y: -window.innerHeight },  // Top-left
-    { x: window.innerWidth, y: -window.innerHeight },   // Top-right
-    { x: -window.innerWidth, y: window.innerHeight },   // Bottom-left
-    { x: window.innerWidth, y: window.innerHeight },    // Bottom-right
-    { x: 0, y: -window.innerHeight * 1.5 },             // Straight up
-    { x: -window.innerWidth * 1.5, y: 0 },              // Straight left
-    { x: window.innerWidth * 1.5, y: 0 }                // Straight right
-  ];
-  
-  const randomDirection = directions[Math.floor(Math.random() * directions.length)];
-  
-  // GSAP animation sequence (same as regular celebrations)
-  const tl = gsap.timeline({
-    onComplete: () => {
-      if (scoreElement && scoreElement.parentNode) {
-        scoreElement.parentNode.removeChild(scoreElement);
-      }
-    }
-  });
-  
-  tl.to(scoreElement, {
-    duration: 0.3,
-    scale: 2.2,
-    opacity: 1,
-    ease: "back.out(1.7)"
-  })
-  .to(scoreElement, {
-    duration: 0.4,
-    scale: 1.8,
-    ease: "power2.out"
-  })
-  .to(scoreElement, {
-    duration: 1.2,
-    x: randomDirection.x,
-    y: randomDirection.y,
-    opacity: 0,
-    scale: 0.5,
-    ease: "power2.in"
-  });
-}
-
-function cleanupTextContent() {
-  // Safety function to completely remove HTML spans and restore clean text
-  const textElement = document.getElementById('text');
-  const animationElement = document.getElementById('animation');
-  
-  [textElement, animationElement].forEach(element => {
-    if (element) {
-      // Check if there are any highlight spans
-      const highlights = element.querySelectorAll('.phrase-highlight');
-      if (highlights.length > 0) {
-        console.log(`Cleaning up ${highlights.length} highlight spans by restoring plain text`);
-        // Get clean text content without HTML markup and restore it
-        const cleanText = element.textContent || element.innerText;
-        element.innerHTML = formattedContent(cleanText);
-      }
-    }
-  });
-}
+// cleanupTextContent function is now imported from effects.js
 
 function updateCategoryCountsDisplay() {
   // Update the UI to show both count and score
@@ -1564,32 +1291,7 @@ function animateTextChange(element, selectedText, newText) {
 }
 
 
-function updateBackgroundForScore(score) {
-  // Map the actual score range (0.6 to 0.99) to the full color spectrum (0 to 1)
-  const minScore = 0.65;
-  const maxScore = 0.9;
-  
-  // Clamp score to the expected range
-  const clampedScore = Math.max(minScore, Math.min(maxScore, score));
-  
-  // Normalize to 0-1 range based on actual score distribution
-  const normalizedScore = (clampedScore - minScore) / (maxScore - minScore);
-  
-  // Create a color that transitions from blue (low score ~0.6) to rose (high score ~0.99)
-  // Low scores (0.6): more blue-ish (#e8f0f8 - light blue)
-  // High scores (0.99): more rose-ish (#f8e8f0 - light rose)
-  
-  const redComponent = Math.floor(232 + (248 - 232) * normalizedScore);   // 232 -> 248 (more red for higher scores)
-  const greenComponent = Math.floor(240 - (240 - 232) * normalizedScore); // 240 -> 232 (less green for higher scores)
-  const blueComponent = Math.floor(248 - (248 - 240) * normalizedScore);  // 248 -> 240 (less blue for higher scores)
-  
-  const backgroundColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
-  
-  //console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Color: ${backgroundColor}`);
-  
-  // Update the CSS variable
-  document.documentElement.style.setProperty('--score-bg-color', backgroundColor);
-}
+// updateBackgroundForScore function is now imported from effects.js
 
 function replaceRelatedInfo(relatedItemObject) {
 
@@ -1708,10 +1410,40 @@ function highlightText(textElement) {
     console.log('selected words', words);
 
     if (words.length > 1 || selectedText.length >= 4) {  // selection rules
-      // Check if selection is within the text element (more flexible check)
+      // More robust check for selection within text element
       const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-      const isWithinTextElement = range && textElement.contains(range.commonAncestorContainer);
-      
+
+      // Check if selection is within text element using multiple validation methods
+      let isWithinTextElement = false;
+
+      if (range) {
+        // Method 1: Check if any part of the range intersects with the text element
+        const rect = range.getBoundingClientRect();
+        const textRect = textElement.getBoundingClientRect();
+
+        // Check if the selection bounding rect overlaps with text element
+        isWithinTextElement = !(rect.right < textRect.left ||
+                               rect.left > textRect.right ||
+                               rect.bottom < textRect.top ||
+                               rect.top > textRect.bottom);
+
+        // Method 2: Also check if start or end containers are within text element
+        if (!isWithinTextElement) {
+          isWithinTextElement = textElement.contains(range.startContainer) ||
+                               textElement.contains(range.endContainer) ||
+                               textElement.contains(range.commonAncestorContainer);
+        }
+
+        console.log('Selection validation:', {
+          selectedText: selectedText.substring(0, 20) + (selectedText.length > 20 ? '...' : ''),
+          boundingBoxOverlap: !(rect.right < textRect.left || rect.left > textRect.right || rect.bottom < textRect.top || rect.top > textRect.bottom),
+          containsStart: textElement.contains(range.startContainer),
+          containsEnd: textElement.contains(range.endContainer),
+          containsCommon: textElement.contains(range.commonAncestorContainer),
+          isWithinTextElement
+        });
+      }
+
       if (selectedText && isWithinTextElement) {
         console.log('in valid selection');
 
@@ -1755,8 +1487,12 @@ function highlightText(textElement) {
             animateTextChange(textElement, selectedText, relatedItemObject.text);
             replaceRelatedInfo(relatedItemObject);
             updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
+            // Reset selection tracking after text change
+            lastSelectionText = '';
           } else {
             animateTextChange(textElement, selectedText, "Error, No text found.");
+            // Reset selection tracking after text change
+            lastSelectionText = '';
           }
         });
         }
@@ -1875,23 +1611,76 @@ try {
     }
   });
 
+  // Unified selection handler for both desktop and mobile
+  let selectionTimeout = null;
+  let isProcessingSelection = false;
+  let lastSelectionText = '';
+
+  function handleSelection() {
+    // Prevent multiple simultaneous processing
+    if (isProcessingSelection) {
+      console.log('Selection already being processed, skipping...');
+      return;
+    }
+
+    // Clear any existing timeout to prevent multiple calls
+    if (selectionTimeout) {
+      clearTimeout(selectionTimeout);
+    }
+
+    console.log('Selection event triggered, processing in 200ms...');
+
+    // Delay to allow selection to stabilize
+    selectionTimeout = setTimeout(() => {
+      const currentSelection = window.getSelection().toString().trim();
+
+      // Check if this is the same selection we just processed
+      if (currentSelection === lastSelectionText && lastSelectionText !== '') {
+        console.log('Duplicate selection detected, skipping...');
+        return;
+      }
+
+      // Check if selection is still valid
+      if (currentSelection.length > 0) {
+        console.log('Processing selection:', currentSelection.substring(0, 30) + '...');
+        isProcessingSelection = true;
+        lastSelectionText = currentSelection;
+        highlightText(textElement);
+
+        // Reset processing flag after a delay
+        setTimeout(() => {
+          isProcessingSelection = false;
+        }, 1000);
+      }
+    }, 200);
+  }
+
   // Desktop selection
-  textElement.addEventListener('mouseup', () => highlightText(textElement));
-  
+  textElement.addEventListener('mouseup', handleSelection);
+
   // Mobile selection support
-  textElement.addEventListener('touchend', () => {
-    // Small delay to allow selection to complete on mobile
-    setTimeout(() => highlightText(textElement), 100);
-  });
-  
-  // Additional mobile selection event
-  textElement.addEventListener('selectionchange', () => {
-    // Only trigger if this element is the target
+  textElement.addEventListener('touchend', handleSelection);
+
+  // Handle selection changes (useful for keyboard selection or programmatic changes)
+  // Only listen for selectionchange on document, not textElement specifically
+  let lastSelectionChangeTime = 0;
+  document.addEventListener('selectionchange', () => {
+    const now = Date.now();
+    // Throttle selectionchange events to once per 300ms
+    if (now - lastSelectionChangeTime < 300) {
+      return;
+    }
+    lastSelectionChangeTime = now;
+
     const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
+    if (selection.rangeCount > 0 && selection.toString().trim().length > 0) {
       const range = selection.getRangeAt(0);
-      if (textElement.contains(range.commonAncestorContainer)) {
-        setTimeout(() => highlightText(textElement), 50);
+      // Check if selection intersects with our text element
+      if (textElement.contains(range.startContainer) ||
+          textElement.contains(range.endContainer) ||
+          textElement.contains(range.commonAncestorContainer)) {
+        console.log('Selection change detected within text element');
+        handleSelection();
       }
     }
   });
