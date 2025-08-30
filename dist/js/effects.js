@@ -449,6 +449,14 @@ export function hideLoading() {
   document.getElementById('loading').style.display = 'none';
 }
 
+export function clearTextSelection() {
+  // Clear any existing text selection
+  if (window.getSelection) {
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+  }
+}
+
 export function performBucketReorder() {
   const bucketContainer = document.getElementById('categoryBuckets');
   if (!bucketContainer) return;

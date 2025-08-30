@@ -131,6 +131,7 @@
     ],
     "sky": [
         "heavens",
+        "heaven",
         "lightning",
         "air",
         "northern lights",
@@ -138,6 +139,7 @@
         "wind",
         "moon",
         "sky",
+        "skies",
         "clouds",
         "rainbow",
         "snow",
@@ -399,6 +401,7 @@
         "clubs",
         "cudgel",
         "club",
+        "whip",
         "axe",
         "bayonet"
     ],

@@ -18,7 +18,8 @@ import {
   showLoading,
   hideLoading,
   performBucketReorder,
-  setGlobalCategoryData
+  setGlobalCategoryData,
+  clearTextSelection
 } from './effects.js';
 
 
@@ -1387,15 +1388,19 @@ function highlightText(textElement) {
           const relatedItemObject = await findRelatedText(selectedText);
           console.log('got relatedItem', relatedItemObject);
           if (relatedItemObject) {
-            animateTextChange(textElement, selectedText, relatedItemObject.text);
+            animateTextChange(textElement, selectedText, relatedItemObject.text, currentResult);
             replaceRelatedInfo(relatedItemObject);
             updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
             // Reset selection tracking after text change
             lastSelectionText = '';
+            // Clear any lingering selection to prevent mobile bugs
+            clearTextSelection();
           } else {
-            animateTextChange(textElement, selectedText, "Error, No text found.");
+            animateTextChange(textElement, selectedText, "Error, No text found.", currentResult);
             // Reset selection tracking after text change
             lastSelectionText = '';
+            // Clear any lingering selection to prevent mobile bugs
+            clearTextSelection();
           }
         });
       }
@@ -1425,24 +1430,27 @@ async function initialize() {
   try {
       showLoading(); // Show loading before starting initialization
 
+      // Clear any existing text selection on initialization
+      clearTextSelection();
+
       await initializeModel("TaylorAI/bge-micro");
       await loadFiles();
       index = await createIndex();
-      
+
       // Create category buckets after data is loaded
       createCategoryBuckets();
       createMetadataBuckets();
-      
+
       // Initialize global category counters
       initializeGlobalCounts();
       // Share global category data with effects.js for bucket reordering
       setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
       updateCategoryCountsDisplay();
       updateMetadataCountsDisplay();
-      
+
       // Set random starting quote
       setRandomStartingQuote();
-      
+
       // Mark initial load as complete to enable scoring for subsequent discoveries
       isInitialLoad = false;
 
@@ -1526,6 +1534,12 @@ try {
       return;
     }
 
+    // Check if we're in the middle of a text animation
+    if (document.querySelector('.word')) {
+      console.log('Text animation in progress, skipping selection...');
+      return;
+    }
+
     // Get the current selection
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
@@ -1547,12 +1561,16 @@ try {
     isProcessingSelection = true;
     lastProcessedSelection = selectedText;
 
+    // Clear the selection immediately to prevent mobile selection bugs
+    clearTextSelection();
+
     // Process the selection
     highlightText(textElement);
 
     // Reset processing flag after animation completes
     setTimeout(() => {
       isProcessingSelection = false;
+      console.log('Selection processing unlocked');
     }, 3000); // Long enough for text change animation to complete
   }
 
