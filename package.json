@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "start": "parcel --no-cache index.html",
-    "build": "parcel build --no-cache --public-url ./ index.html"
+    "build": "parcel build --public-url=./ index.html"
   },
   "keywords": [],
   "author": "",
