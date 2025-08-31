@@ -58,6 +58,32 @@
                 </div>
             </div>
         </div>
+
+        <!-- Yours Category Edit Modal -->
+        <div id="yoursEditModal" class="modal hidden">
+            <div class="modal-content yours-edit-modal-content">
+                <span class="close" id="yoursEditModalClose">&times;</span>
+                <h2>Edit "Yours" Category</h2>
+                <p class="yours-edit-description">Add words and phrases that you want to track in the "Yours" category:</p>
+
+                <div class="yours-edit-form">
+                    <input type="text" id="yoursNewWord" placeholder="Enter a word or phrase" maxlength="50">
+                    <button id="yoursAddWord">Add Word</button>
+                </div>
+
+                <div class="yours-current-words">
+                    <h3>Current Words:</h3>
+                    <div id="yoursWordsList" class="yours-words-list">
+                        <p class="empty-list">No words added yet. Add some words above!</p>
+                    </div>
+                </div>
+
+                <div class="yours-edit-actions">
+                    <button id="yoursSaveButton">Save Changes</button>
+                    <button id="yoursCancelButton">Cancel</button>
+                </div>
+            </div>
+        </div>
         
         <!--
         <div class="sidebar" id="sidebar">

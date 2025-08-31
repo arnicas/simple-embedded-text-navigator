@@ -1,4 +1,5 @@
 {
+    "yours": [],
     "person": [
         "old woman",
         "old man",
@@ -144,6 +145,8 @@
         "rainbow",
         "snow",
         "snowflake",
+        "snow-flakes",
+        "snowflakes",
         "rain",
         "rainy",
         "cloud",
@@ -192,6 +195,7 @@
         "queen",
         "kings",
         "princes",
+        "emperor",
         "duke",
         "dukes",
         "duchess",
@@ -464,6 +468,7 @@
         "nuts",
         "nut",
         "berries",
-        "berry"
+        "berry",
+        "barberry"
     ]
 }
