@@ -70,6 +70,7 @@ body {
 
 #textContainer {
     width: 100%;
+    min-height: 250px; /* Add minimum height to prevent frequent resizing */
     max-height: 60vh;
     max-width: 650px;
     background-color: white;
@@ -77,6 +78,9 @@ body {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
+    display: flex; /* Add flexbox for centering */
+    align-items: center; /* Center vertically */
+    justify-content: center; /* Center horizontally */
 }
 
 /* Mobile improvements */
@@ -97,6 +101,10 @@ body {
         padding: 15px;
         margin: 10px;
         max-width: calc(100% - 20px);
+        min-height: 200px; /* Add minimum height for mobile to prevent resizing */
+        display: flex; /* Add flexbox for centering */
+        align-items: center; /* Center vertically */
+        justify-content: center; /* Center horizontally */
     }
     
     #text, #animation {
@@ -179,15 +187,15 @@ body {
 
 .metadata-count {
     display: inline-block;
-    background-color: rgba(255, 182, 193, 0.9);
+    background-color: rgba(173, 216, 230, 0.9);
     color: #8B4513;
     border-radius: clamp(8px, 1.5vw, 12px);
     min-width: clamp(28px, 4vw, 40px);
     height: clamp(18px, 2.5vw, 24px);
     line-height: clamp(18px, 2.5vw, 24px);
     text-align: center;
-    font-size: clamp(11px, 1.4vw, 14px);
-    font-weight: normal;
+    font-size: clamp(12px, 1.6vw, 16px);
+    font-weight: bold;
     margin-top: 3px;
     padding: 1px 4px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -277,14 +285,19 @@ body {
     word-wrap: break-word;
     line-height: 1.2;
     font-family: 'Macondo', cursive;
+    position: relative;
+    z-index: 5;
+    margin-bottom: 8px;
 }
+
+
 
 .category-count {
     background-color: rgba(218, 165, 32, 0.3);
     border-radius: 8px;
     padding: 1px 4px;
-    font-size: 10px;
-    font-weight: normal;
+    font-size: 12px;
+    font-weight: bold;
     color: #2d1810;
     display: inline-block;
     min-width: 12px;
@@ -297,6 +310,19 @@ body {
     background-color: rgba(218, 165, 32, 0.5);
     color: #2d1810;
     border-color: rgba(184, 134, 11, 0.4);
+}
+
+/* Special styling for Yours category score - make it pink like metadata scores */
+#count-yours {
+    background-color: rgba(255, 182, 193, 0.9) !important;
+    color: #8B4513 !important;
+    border-color: rgba(184, 134, 11, 0.3) !important;
+}
+
+#count-yours.category-count {
+    background-color: rgba(255, 182, 193, 0.9) !important;
+    color: #8B4513 !important;
+    border-color: rgba(184, 134, 11, 0.3) !important;
 }
 
 .phrase-highlight {
@@ -476,7 +502,7 @@ body {
     font-family: 'Patrick Hand', cursive;
     font-size: 48px;
     font-weight: bold;
-    color: #FF69B4;
+    color: #4682B4;
     text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.4);
     pointer-events: none;
     z-index: 2500;
@@ -610,7 +636,7 @@ body {
 .modal h2 {
     color: #2d1810;
     font-family: "Macondo", cursive;
-    font-size: 28px;
+    font-size: 24px;
     margin-bottom: 20px;
     text-align: center;
     border-bottom: 2px solid #daa520;
@@ -674,8 +700,8 @@ button {
 }
 
 .category-modal-image {
-    width: 120px;
-    height: 120px;
+    width: 150px;
+    height: 150px;
     object-fit: cover;
     border-radius: 12px;
     margin: 0 auto 20px auto;
@@ -743,5 +769,251 @@ button {
     font-size: 13px;
     border: 1px solid rgba(218, 165, 32, 0.4);
     display: inline-block;
+}
+
+/* ===== YOURS EDIT MODAL STYLES ===== */
+
+#categoryModalBody {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Ensure edit button is contained within modal */
+
+.yours-edit-button {
+    background: rgba(218, 165, 32, 0.95);
+    color: #2d1810;
+    border: 2px solid rgba(184, 134, 11, 0.9);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-family: "Patrick Hand";
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    min-width: 120px;
+    text-align: center;
+    line-height: 1.2;
+    white-space: nowrap;
+    backdrop-filter: blur(2px);
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+    margin: 20px auto 0 auto;
+    display: block;
+    width: fit-content;
+    max-width: calc(100% - 40px);
+    position: relative;
+    box-sizing: border-box;
+}
+
+.yours-edit-button:hover {
+    background: rgba(218, 165, 32, 1);
+    border-color: rgba(184, 134, 11, 1);
+    transform: scale(1.05);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.yours-edit-button:active {
+    transform: scale(0.98);
+}
+
+.yours-edit-modal-content {
+    max-width: 500px;
+}
+
+.yours-edit-description {
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-align: center;
+    font-family: "Patrick Hand";
+}
+
+.yours-edit-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.yours-edit-form input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #daa520;
+    border-radius: 8px;
+    font-family: "Patrick Hand";
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.yours-edit-form input:focus {
+    outline: none;
+    border-color: #b8860b;
+    box-shadow: 0 0 5px rgba(218, 165, 32, 0.5);
+}
+
+.yours-edit-form button {
+    background: rgba(218, 165, 32, 0.9);
+    color: #2d1810;
+    border: 2px solid rgba(184, 134, 11, 0.8);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-family: "Patrick Hand";
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.yours-edit-form button:hover {
+    background: rgba(218, 165, 32, 1);
+    border-color: rgba(184, 134, 11, 1);
+    transform: scale(1.05);
+}
+
+.yours-current-words {
+    margin-bottom: 20px;
+}
+
+.yours-current-words h3 {
+    color: #2d1810;
+    font-size: 18px;
+    margin-bottom: 10px;
+    text-align: center;
+    border-bottom: 1px solid #daa520;
+    padding-bottom: 5px;
+}
+
+.yours-words-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(218, 165, 32, 0.3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 10px;
+}
+
+.empty-list {
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    margin: 20px 0;
+    font-family: "Patrick Hand";
+}
+
+.yours-word-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    margin-bottom: 5px;
+    background: rgba(218, 165, 32, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(218, 165, 32, 0.2);
+}
+
+.yours-word-text {
+    flex: 1;
+    font-family: "Patrick Hand";
+    font-size: 14px;
+    color: #2d1810;
+    word-break: break-word;
+}
+
+.yours-word-category-note {
+    font-size: 12px;
+    color: #8B4513;
+    opacity: 0.8;
+    margin-left: 5px;
+}
+
+.yours-remove-word {
+    background: rgba(220, 53, 69, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.yours-remove-word:hover {
+    background: rgba(220, 53, 69, 1);
+    transform: scale(1.1);
+}
+
+.yours-edit-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.yours-edit-actions button {
+    background: rgba(40, 167, 69, 0.9);
+    color: white;
+    border: 2px solid rgba(34, 139, 34, 0.8);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-family: "Patrick Hand";
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.yours-edit-actions button:hover {
+    transform: scale(1.05);
+}
+
+.yours-edit-actions button:nth-child(2) {
+    background: rgba(108, 117, 125, 0.9);
+    border-color: rgba(90, 98, 104, 0.8);
+}
+
+.yours-edit-actions button:nth-child(2):hover {
+    background: rgba(108, 117, 125, 1);
+    border-color: rgba(90, 98, 104, 1);
+}
+
+/* Mobile responsiveness for Yours edit modal */
+@media (max-width: 768px) {
+    .yours-edit-modal-content {
+        max-width: 90vw;
+        margin: 10px;
+    }
+    
+    .yours-edit-form {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .yours-edit-form input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .yours-edit-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .yours-edit-actions button {
+        width: 100%;
+    }
+    
+    /* Ensure edit button is properly sized on mobile */
+    .yours-edit-button {
+        min-width: 100px;
+        padding: 10px 20px;
+        font-size: 13px;
+    }
 }
   

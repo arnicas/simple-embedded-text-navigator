@@ -35,7 +35,7 @@ let currentResult = null; // Will be set to random quote on initialization
 let alreadySeen = [];
 let scores = {};
 
-// ===== METADATA DISCOVERY SCORING CONFIGURATION =====
+// ===== METADATA DISCOVERY SCORES CONFIGURATION =====
 // These values can be easily modified to adjust scoring for new discoveries
 // Points are awarded when users find new content through text selection
 const METADATA_DISCOVERY_SCORES = {
@@ -59,6 +59,9 @@ let globalCategoryScores = {};
 
 // Global category matched phrases that persist across sessions
 let globalCategoryMatches = {};
+
+// User's custom "Yours" category words
+let userYoursWords = [];
 
 // Metadata tracking (authors, books, stories) - count only
 let globalMetadataCounts = {
@@ -120,6 +123,21 @@ async function loadFiles() {
   // Count unique metadata in the dataset
   countDatasetMetadata();
   
+  // Initialize "Yours" category with user words if they exist
+  if (userYoursWords && userYoursWords.length > 0) {
+    categories.yours = [...userYoursWords];
+    console.log('Initialized "Yours" category with user words:', userYoursWords);
+    
+    // Add new words to word_scores (but don't give them scores until discovered)
+    userYoursWords.forEach(word => {
+      const normalizedWord = word.toLowerCase();
+      // Don't add to word_scores until the phrase is actually discovered in text
+      // This ensures the modal only shows actually discovered items
+    });
+    
+    // Initialize global data for "Yours" category
+    recalculateYoursCategory();
+  }
 }
 
 function countDatasetMetadata() {
@@ -401,7 +419,15 @@ function calculateCategoryScore(phrases) {
     const words = phrase.toLowerCase().split(/\s+/);
     words.forEach(word => {
       // Look up word score, default to 0 if not found
-      const wordScore = word_scores[word] || 0;
+      let wordScore = word_scores[word] || 0;
+      
+      // Special case for "Yours" category: ensure all words get at least 1 point
+      if (categories.yours && categories.yours.includes(word) && wordScore === 0) {
+        wordScore = 1;
+        // Also update word_scores to persist this
+        word_scores[word] = 1;
+      }
+      
       totalScore += wordScore;
     });
   });
@@ -411,17 +437,11 @@ function calculateCategoryScore(phrases) {
 }
 
 function getWordScoreDisplay(phrase) {
-  // Split phrase into words and calculate total score
-  const words = phrase.toLowerCase().split(/\s+/);
-  let totalScore = 0;
+  // Only show scores for phrases that have actually been discovered
+  let phraseScore = word_scores[phrase] || 0;
   
-  words.forEach(word => {
-    const score = word_scores[word] || 0;
-    totalScore += score;
-  });
-  
-  // Show phrase with total score instead of individual word scores
-  return { display: `${phrase} (${totalScore} pts)`, totalScore };
+  // No automatic base scores - phrases only get points when discovered
+  return { display: `${phrase} (${phraseScore} pts)`, totalScore: phraseScore };
 }
 
 function createMetadataBuckets() {
@@ -472,36 +492,49 @@ function createMetadataBuckets() {
 function createCategoryBuckets() {
   const bucketContainer = document.getElementById('categoryBuckets');
   bucketContainer.innerHTML = ''; // Clear existing buckets
-  
+
   // Get all category names from the loaded categories data
   const categoryNames = Object.keys(categories);
-  
-  categoryNames.forEach(categoryName => {
+
+  // Ensure "Yours" bucket is always created first
+  const yoursIndex = categoryNames.indexOf('yours');
+  let orderedCategoryNames = [...categoryNames];
+
+  if (yoursIndex > -1) {
+    // Move "yours" to the front
+    orderedCategoryNames.splice(yoursIndex, 1);
+    orderedCategoryNames.unshift('yours');
+  }
+
+  orderedCategoryNames.forEach(categoryName => {
     const bucketDiv = document.createElement('div');
     bucketDiv.className = 'categoryBucket';
     bucketDiv.id = `bucket-${categoryName}`;
-    
+
     const img = document.createElement('img');
     // Try to use category-specific image, fallback to generic bucket
     img.src = `images/${categoryName}.jpg`;
     img.alt = categoryName;
-    
+
     // Add error handler to fallback to generic bucket image
     img.onerror = function() {
       this.src = 'images/bucket.jpeg';
     };
-    
+
     const label = document.createElement('div');
     label.className = 'categoryLabel';
     label.innerHTML = `${categoryName}<br><span class="category-count" id="count-${categoryName}" style="display: none;">0</span>`;
-    
+
     // Add click event listener for modal
     bucketDiv.addEventListener('click', () => {
       showCategoryModal(categoryName, img.src);
     });
-    
+
     bucketDiv.appendChild(img);
     bucketDiv.appendChild(label);
+
+
+
     bucketContainer.appendChild(bucketDiv);
   });
 }
@@ -527,7 +560,11 @@ function showCategoryModal(categoryName, imageSrc) {
     modalCount.style.display = 'none'; // Hide the separate count element
   } else {
     modalTitle.textContent = capitalizedName;
-    modalCount.textContent = `Keep exploring to discover ${categoryName} elements and earn points!`;
+    // Special message for "Yours" category when no words added
+    const defaultMessage = categoryName === 'yours' 
+      ? 'You can add your own text to search for, with score of 1 each.'
+      : `Keep exploring to discover ${categoryName} elements and earn points!`;
+    modalCount.textContent = defaultMessage;
     modalCount.style.display = 'block';
   }
   
@@ -535,18 +572,50 @@ function showCategoryModal(categoryName, imageSrc) {
   const matches = globalCategoryMatches[categoryName];
   if (matches && matches.size > 0) {
     const matchesArray = Array.from(matches).sort();
-        modalMatches.innerHTML = `
-        <p class="scoring-explanation">Common items have fewer points associated with them.</p>
-        <div class="category-matches-list">
-          ${matchesArray.map(phrase => {
-            const scoreInfo = getWordScoreDisplay(phrase);
-            return `<span class="match-phrase">${scoreInfo.display}</span>`;
-          }).join('')}
-        </div>
-      `;
+    
+    // Special message for "Yours" category
+    const scoringExplanation = categoryName === 'yours' 
+      ? '<p class="scoring-explanation">You can add your own text to search for, with score of 1 each.</p>'
+      : '<p class="scoring-explanation">Common items have fewer points associated with them.</p>';
+    
+    modalMatches.innerHTML = `
+      ${scoringExplanation}
+      <div class="category-matches-list">
+        ${matchesArray.map(phrase => {
+          const scoreInfo = getWordScoreDisplay(phrase);
+          return `<span class="match-phrase">${scoreInfo.display}</span>`;
+        }).join('')}
+      </div>
+    `;
     modalMatches.style.display = 'block';
   } else {
     modalMatches.style.display = 'none';
+  }
+  
+  // Add edit button for "Yours" category
+  const existingEditButton = modal.querySelector('.yours-edit-button');
+  if (existingEditButton) {
+    existingEditButton.remove();
+  }
+  
+  if (categoryName === 'yours') {
+    const editButton = document.createElement('button');
+    editButton.className = 'yours-edit-button';
+    editButton.textContent = 'Edit Yours Category';
+    editButton.title = 'Edit Yours category words';
+    editButton.addEventListener('click', () => {
+      hideCategoryModal();
+      showYoursEditModal();
+    });
+    
+    // Insert the edit button within the modal body content
+    const modalBody = document.getElementById('categoryModalBody');
+    if (modalBody) {
+      modalBody.appendChild(editButton);
+    } else {
+      // Fallback: insert after modal matches
+      modal.appendChild(editButton);
+    }
   }
   
   // Show modal
@@ -556,6 +625,213 @@ function showCategoryModal(categoryName, imageSrc) {
 function hideCategoryModal() {
   const modal = document.getElementById('categoryModal');
   modal.classList.add('hidden');
+}
+
+// ===== YOURS CATEGORY EDIT MODAL FUNCTIONS =====
+
+function showYoursEditModal() {
+  const modal = document.getElementById('yoursEditModal');
+  const wordsList = document.getElementById('yoursWordsList');
+
+  // Clear the input field
+  document.getElementById('yoursNewWord').value = '';
+
+  // Display current words
+  updateYoursWordsDisplay();
+
+  // Show modal
+  modal.classList.remove('hidden');
+}
+
+function hideYoursEditModal() {
+  const modal = document.getElementById('yoursEditModal');
+  modal.classList.add('hidden');
+}
+
+function updateYoursWordsDisplay() {
+  const wordsList = document.getElementById('yoursWordsList');
+
+  if (userYoursWords.length === 0) {
+    wordsList.innerHTML = '<p class="empty-list">No words added yet. Add some words above!</p>';
+    return;
+  }
+
+  wordsList.innerHTML = userYoursWords.map((word, index) => {
+    // Check if this word exists in any preset categories
+    const presetCategories = [];
+    Object.keys(categories).forEach(categoryName => {
+      if (categoryName !== 'yours' && categories[categoryName] && categories[categoryName].includes(word.toLowerCase())) {
+        presetCategories.push(categoryName);
+      }
+    });
+    
+    // Create the notation if word exists in preset categories
+    const categoryNotation = presetCategories.length > 0 
+      ? ` <span class="yours-word-category-note">(also in ${presetCategories.join(', ')})</span>`
+      : '';
+    
+    return `
+      <div class="yours-word-item">
+        <span class="yours-word-text">${word}${categoryNotation}</span>
+        <button class="yours-remove-word" data-index="${index}" title="Remove word">×</button>
+      </div>
+    `;
+  }).join('');
+
+  // Add event listeners to remove buttons
+  wordsList.querySelectorAll('.yours-remove-word').forEach(button => {
+    button.addEventListener('click', (e) => {
+      const index = parseInt(e.target.getAttribute('data-index'));
+      removeYoursWord(index);
+    });
+  });
+}
+
+function addYoursWord() {
+  const input = document.getElementById('yoursNewWord');
+  const word = input.value.trim().toLowerCase();
+
+  if (!word) {
+    alert('Please enter a word or phrase.');
+    return;
+  }
+
+  if (userYoursWords.includes(word)) {
+    alert('This word is already in your list.');
+    return;
+  }
+
+  // Check if this word already exists in the scoring system with a higher score
+  const existingScore = word_scores[word];
+  if (existingScore && existingScore > 1) {
+    alert('This word already exists in the system with a higher score. You cannot add it to your personal category.');
+    return;
+  }
+
+  userYoursWords.push(word);
+  input.value = '';
+  updateYoursWordsDisplay();
+}
+
+function removeYoursWord(index) {
+  const wordToRemove = userYoursWords[index];
+  const normalizedWord = wordToRemove.toLowerCase();
+
+  // Remove from user list
+  userYoursWords.splice(index, 1);
+
+  // Remove from word_scores only if it has score 1 (user-added)
+  // Don't remove words with higher scores as they might be from the original dataset
+  if (word_scores[normalizedWord] === 1) {
+    delete word_scores[normalizedWord];
+  }
+
+  updateYoursWordsDisplay();
+}
+
+function saveYoursChanges() {
+  // Store the previous words to check what was removed
+  const previousWords = new Set(categories.yours || []);
+  const newWords = new Set(userYoursWords);
+  
+  // Remove words that were deleted from word_scores (but keep their scores if they were found)
+  previousWords.forEach(word => {
+    if (!newWords.has(word)) {
+      const normalizedWord = word.toLowerCase();
+      // Only remove from word_scores if it was a user-added word (score = 1)
+      // Don't remove if it has a higher score from being found
+      if (word_scores[normalizedWord] === 1) {
+        delete word_scores[normalizedWord];
+      }
+    }
+  });
+  
+  // Add new words to word_scores (but don't give them scores until discovered)
+  userYoursWords.forEach(word => {
+    const normalizedWord = word.toLowerCase();
+    // Don't add to word_scores until the phrase is actually discovered in text
+    // This ensures the modal only shows actually discovered items
+  });
+
+  // Update the categories data structure
+  categories.yours = [...userYoursWords];
+
+  // DON'T clear the global matches - preserve existing discoveries
+  // Only update the counts and scores based on current state
+  updateYoursScoreDisplay();
+  
+  // Recalculate "Yours" category scores and matches
+  recalculateYoursCategory();
+  
+  console.log('Saved "Yours" category words:', userYoursWords);
+  console.log('User words added to "Yours" category - they will get scores when discovered in text');
+
+  hideYoursEditModal();
+
+  // Optional: Show a success message
+  const messageElement = document.getElementById('message');
+  if (messageElement) {
+    messageElement.textContent = '"Yours" category updated successfully!';
+    messageElement.style.display = 'flex';
+    gsap.to(messageElement, {
+      duration: 3,
+      opacity: 1,
+      onComplete: () => {
+        messageElement.textContent = "";
+        messageElement.style.display = 'none';
+      }
+    });
+  }
+}
+
+function cancelYoursChanges() {
+  hideYoursEditModal();
+}
+
+function recalculateYoursCategory() {
+  // Initialize global matches for "yours" if it doesn't exist
+  if (!globalCategoryMatches.yours) {
+    globalCategoryMatches.yours = new Set();
+  }
+  
+  // Initialize global counts and scores for "yours" if they don't exist
+  if (!globalCategoryCounts.yours) {
+    globalCategoryCounts.yours = 0;
+  }
+  if (!globalCategoryScores.yours) {
+    globalCategoryScores.yours = 0;
+  }
+  
+  // Clear existing matches - we'll rebuild based on actual discoveries
+  globalCategoryMatches.yours.clear();
+  
+  // Recalculate based on actual discoveries in word_scores
+  let totalScore = 0;
+  let totalCount = 0;
+  
+  userYoursWords.forEach(word => {
+    const normalizedWord = word.toLowerCase();
+    let wordScore = word_scores[normalizedWord] || 0;
+    
+    // Only include items that have been actually discovered in text (score > 0)
+    // Items added by user but not yet discovered will have score 0 and won't appear
+    if (wordScore > 0) {
+      globalCategoryMatches.yours.add(word);
+      totalScore += wordScore;
+      totalCount++;
+    }
+  });
+  
+  // Update global counts and scores
+  globalCategoryCounts.yours = totalCount;
+  globalCategoryScores.yours = totalScore;
+  
+  console.log(`Recalculated "Yours" category: ${totalCount} words, ${totalScore} points`);
+  console.log('Updated global counts and scores for "yours":', globalCategoryCounts.yours, globalCategoryScores.yours);
+  
+  // Update the display
+  updateYoursScoreDisplay();
+  updateTotalDisplay();
 }
 
 function showMetadataModal(metadataType, imageSrc) {
@@ -831,6 +1107,9 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   // Store the total score to be celebrated later, don't celebrate immediately
   // This prevents multiple celebrations if this function is called multiple times
   window.pendingCategoryScore = (window.pendingCategoryScore || 0) + totalNewScore;
+  
+  // Update total display after category scoring is processed
+  updateTotalDisplay();
 }
 
 function triggerPendingCategoryCelebration() {
@@ -839,6 +1118,9 @@ function triggerPendingCategoryCelebration() {
     console.log(`Triggering accumulated category celebration: ${window.pendingCategoryScore}pts`);
     showCategoryScoreCelebration(Math.round(window.pendingCategoryScore));
     window.pendingCategoryScore = 0; // Reset after celebrating
+    
+    // Update total display after celebration is triggered
+    updateTotalDisplay();
   }
 }
 
@@ -866,6 +1148,9 @@ function updateCategoryCountsDisplay() {
     }
   });
   
+  // Update "Yours" score display
+  updateYoursScoreDisplay();
+
   // Update total display whenever category scores change
   updateTotalDisplay();
 }
@@ -896,14 +1181,39 @@ function updateMetadataCountsDisplay() {
   updateTotalDisplay();
 }
 
+function updateYoursScoreDisplay() {
+  const count = globalCategoryCounts.yours || 0;
+  const score = globalCategoryScores.yours || 0;
+  const countElement = document.getElementById('count-yours');
+
+  if (countElement) {
+    // Update the standard category count display
+    countElement.textContent = `${Math.round(score)} (${count})`;
+    countElement.style.display = 'inline';
+    console.log(`Set Yours count display to: ${Math.round(score)} (${count})`);
+  } else {
+    console.warn('count-yours element not found');
+  }
+}
+
 function updateTotalDisplay() {
-  const totalPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
-  const totalPointsElement = document.getElementById('metadata-count-total');
+  // Calculate total category points
+  const categoryPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
   
+  // Calculate total metadata points
+  const metadataPoints = (globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR) +
+                        (globalMetadataCounts.books * METADATA_DISCOVERY_SCORES.NEW_BOOK) +
+                        (globalMetadataCounts.stories * METADATA_DISCOVERY_SCORES.NEW_STORY);
+  
+  // Total points is sum of both
+  const totalPoints = categoryPoints + metadataPoints;
+  
+  const totalPointsElement = document.getElementById('metadata-count-total');
+
   if (totalPointsElement) {
     totalPointsElement.textContent = `${Math.round(totalPoints)} pts`;
     totalPointsElement.style.display = 'inline';
-    console.log(`Set total points display to: ${Math.round(totalPoints)} pts`);
+    console.log(`Set total points display to: ${Math.round(totalPoints)} pts (Categories: ${Math.round(categoryPoints)}, Metadata: ${Math.round(metadataPoints)})`);
   }
 }
 
@@ -1336,93 +1646,89 @@ function calculateAndCelebrateMetadataScore() {
     newStory: null,
     totalPoints: 0
   };
+  
+  // Update total display after metadata discoveries are processed
+  updateTotalDisplay();
 }
 
 
-function highlightText(textElement) {
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
-    console.log('Processing text selection:', selectedText.substring(0, 30) + '...');
+async function processSelection(textElement, selectedText, range) {
+  console.log('Processing text selection:', selectedText.substring(0, 30) + '...');
 
-    // Simple validation - just check if text exists and element contains selection
-    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-    const isWithinTextElement = range && textElement.contains(range.commonAncestorContainer);
+  const isWithinTextElement = range && textElement.contains(range.commonAncestorContainer);
 
-    if (selectedText && isWithinTextElement) {
-        console.log('in valid selection');
-
-        // Create highlight span
-        const span = document.createElement('span');
-        span.className = 'highlight';
-        
-        // Use the range we already got from the validation check
-        try {
-          range.surroundContents(span);
-        } catch (e) {
-          // If surroundContents fails, use this alternative approach
-          span.appendChild(range.extractContents());
-          range.insertNode(span);
-        // Check if the selection is valid
-        if (span && span.parentNode) {
-          console.log('Highlight span created successfully');
-        } else {
-          console.error('Failed to create highlight span');
-        // If the highlight span creation fails, show a message to the user
-        const messageElement = document.getElementById('message');
-        messageElement.textContent = "Failed to highlight the text. Please try again.";
-        messageElement.style.display = 'flex';
-
-        gsap.to(messageElement, {
-          duration: 4,
-          opacity: 1,
-          onComplete: () => {
-            messageElement.textContent = "";
-            messageElement.style.display = 'none';
-          }
-        });
+  if (!selectedText || !isWithinTextElement) {
+    // Show invalid selection message
+    console.log('Invalid selection - text length:', selectedText.length, 'within element:', isWithinTextElement);
+    const messageElement = document.getElementById('message');
+    if (messageElement) {
+      messageElement.textContent = "Please select a longer word or phrase.";
+      messageElement.style.display = 'flex';
+      gsap.to(messageElement, {
+        duration: 4,
+        opacity: 1,
+        onComplete: () => {
+          messageElement.textContent = "";
+          messageElement.style.display = 'none';
         }
+      });
+    }
+    return;
+  }
+
+  console.log('Valid selection, creating highlight...');
+
+  // Create highlight span
+  const span = document.createElement('span');
+  span.className = 'highlight';
+
+  try {
+    range.surroundContents(span);
+  } catch (e) {
+    // If surroundContents fails, use alternative approach
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+  }
+
+  // Check if the highlight span was created successfully
+  if (!span || !span.parentNode) {
+    console.error('Failed to create highlight span');
+    const messageElement = document.getElementById('message');
+    if (messageElement) {
+      messageElement.textContent = "Failed to highlight the text. Please try again.";
+      messageElement.style.display = 'flex';
+      gsap.to(messageElement, {
+        duration: 4,
+        opacity: 1,
+        onComplete: () => {
+          messageElement.textContent = "";
+          messageElement.style.display = 'none';
         }
+      });
+    }
+    return;
+  }
 
-        // Wait for 1 second, then proceed with text change
-        gsap.delayedCall(1, async () => {
-          const relatedItemObject = await findRelatedText(selectedText);
-          console.log('got relatedItem', relatedItemObject);
-          if (relatedItemObject) {
-            animateTextChange(textElement, selectedText, relatedItemObject.text, currentResult);
-            replaceRelatedInfo(relatedItemObject);
-            updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
-            // Reset selection tracking after text change
-            lastSelectionText = '';
-            // Clear any lingering selection to prevent mobile bugs
-            clearTextSelection();
-          } else {
-            animateTextChange(textElement, selectedText, "Error, No text found.", currentResult);
-            // Reset selection tracking after text change
-            lastSelectionText = '';
-            // Clear any lingering selection to prevent mobile bugs
-            clearTextSelection();
-          }
-        });
-      }
-      else {
-        // show a message to the user that fades out
-        console.log('in invalid selection');
-        const messageElement = document.getElementById('message');
-        messageElement.textContent = "Please select a longer word or phrase.";
-        messageElement.style.display = 'flex';
+  console.log('Highlight created successfully, finding related text...');
 
-        // TODO: reset the selection color
-        
-        gsap.to(messageElement, {
-          duration: 4,
-          opacity: 1,
-          onComplete: () => {
-            messageElement.textContent = "";
-            messageElement.style.display = 'none';
-          }
-        });
-        
-      }
+  // Wait longer for user to see the highlight before transitioning
+  await new Promise(resolve => setTimeout(resolve, 800));
+
+  try {
+    const relatedItemObject = await findRelatedText(selectedText);
+    console.log('Found related item with score:', relatedItemObject ? relatedItemObject.score : 'none');
+
+    if (relatedItemObject) {
+      animateTextChange(textElement, selectedText, relatedItemObject.text, currentResult);
+      replaceRelatedInfo(relatedItemObject);
+      updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
+    } else {
+      animateTextChange(textElement, selectedText, "Error, No text found.", currentResult);
+    }
+  } catch (error) {
+    console.error('Error finding related text:', error);
+    animateTextChange(textElement, selectedText, "Error occurred while finding related text.", currentResult);
+  }
 }
 
 // Your main initialization function
@@ -1510,7 +1816,43 @@ try {
       hideCategoryModal();
     }
   });
-  
+
+  // ===== YOURS EDIT MODAL EVENT LISTENERS =====
+
+  // Yours edit modal elements
+  const yoursEditModal = document.getElementById('yoursEditModal');
+  const yoursEditModalClose = document.getElementById('yoursEditModalClose');
+  const yoursAddWord = document.getElementById('yoursAddWord');
+  const yoursNewWord = document.getElementById('yoursNewWord');
+  const yoursSaveButton = document.getElementById('yoursSaveButton');
+  const yoursCancelButton = document.getElementById('yoursCancelButton');
+
+  // Close modal when clicking X
+  yoursEditModalClose.addEventListener('click', hideYoursEditModal);
+
+  // Close modal when clicking outside
+  yoursEditModal.addEventListener('click', (e) => {
+    if (e.target === yoursEditModal) {
+      hideYoursEditModal();
+    }
+  });
+
+  // Add word button
+  yoursAddWord.addEventListener('click', addYoursWord);
+
+  // Add word on Enter key
+  yoursNewWord.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      addYoursWord();
+    }
+  });
+
+  // Save button
+  yoursSaveButton.addEventListener('click', saveYoursChanges);
+
+  // Cancel button
+  yoursCancelButton.addEventListener('click', cancelYoursChanges);
+
   // Hide modals with Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -1520,6 +1862,9 @@ try {
       if (!categoryModal.classList.contains('hidden')) {
         hideCategoryModal();
       }
+      if (!yoursEditModal.classList.contains('hidden')) {
+        hideYoursEditModal();
+      }
     }
   });
 
@@ -1527,7 +1872,7 @@ try {
   let isProcessingSelection = false;
   let lastProcessedSelection = '';
 
-  function handleSelection() {
+  async function handleSelection() {
     // Prevent processing if already busy
     if (isProcessingSelection) {
       console.log('Already processing selection, skipping...');
@@ -1561,17 +1906,39 @@ try {
     isProcessingSelection = true;
     lastProcessedSelection = selectedText;
 
-    // Clear the selection immediately to prevent mobile selection bugs
-    clearTextSelection();
+    try {
+      // Capture the range BEFORE clearing the selection
+      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
-    // Process the selection
-    highlightText(textElement);
+      // Clear the selection after a longer delay to allow users to see their selection
+      setTimeout(() => {
+        clearTextSelection();
+      }, 300); // Increased delay to give users time to see their selection
 
-    // Reset processing flag after animation completes
-    setTimeout(() => {
+      // Process the selection with the captured range
+      await processSelection(textElement, selectedText, range);
+
+    } catch (error) {
+      console.error('Error processing selection:', error);
+      // Show error message to user
+      const messageElement = document.getElementById('message');
+      if (messageElement) {
+        messageElement.textContent = "An error occurred. Please try again.";
+        messageElement.style.display = 'flex';
+        gsap.to(messageElement, {
+          duration: 4,
+          opacity: 1,
+          onComplete: () => {
+            messageElement.textContent = "";
+            messageElement.style.display = 'none';
+          }
+        });
+      }
+    } finally {
+      // Always reset the processing flag
       isProcessingSelection = false;
       console.log('Selection processing unlocked');
-    }, 3000); // Long enough for text change animation to complete
+    }
   }
 
   // Cross-platform selection handling
@@ -1586,53 +1953,66 @@ try {
 
     textElement.addEventListener('touchend', () => {
       // Delay to allow touch selection menu to appear/disappear
-      setTimeout(() => {
+      setTimeout(async () => {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
 
         if (selectedText.length >= 4) {
-          console.log('Mobile selection detected:', selectedText.substring(0, 30) + '...');
-          handleSelection();
+          console.log('Mobile touch selection detected:', selectedText.substring(0, 30) + '...');
+          await handleSelection();
         }
-      }, 300); // Longer delay for mobile
+      }, 400); // Increased delay for mobile touch selection
     });
 
     // Also listen for selection changes on mobile
+    let mobileSelectionTimeout = null;
+
     document.addEventListener('selectionchange', () => {
-      setTimeout(() => {
+      // Clear any pending timeout
+      if (mobileSelectionTimeout) {
+        clearTimeout(mobileSelectionTimeout);
+      }
+
+      // Set a new timeout to process the selection
+      mobileSelectionTimeout = setTimeout(async () => {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
 
         if (selectedText.length >= 4 && !isProcessingSelection) {
           const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
           if (range && textElement.contains(range.commonAncestorContainer)) {
-            console.log('Mobile selection change detected');
-            handleSelection();
+            console.log('Mobile selection change detected:', selectedText.substring(0, 30) + '...');
+            await handleSelection();
           }
         }
-      }, 200);
+      }, 400); // Increased delay for mobile selection
     });
 
   } else {
-    // Desktop: Use mouse events
+    // Desktop: Use selectionchange event for reliable detection
     console.log('Using desktop selection handling');
 
-    textElement.addEventListener('mouseup', handleSelection);
+    let selectionTimeout = null;
 
-    // Fallback for keyboard-based selections
     document.addEventListener('selectionchange', () => {
-      setTimeout(() => {
+      // Clear any pending timeout
+      if (selectionTimeout) {
+        clearTimeout(selectionTimeout);
+      }
+
+      // Set a new timeout to process the selection
+      selectionTimeout = setTimeout(async () => {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
 
         if (selectedText.length >= 4 && !isProcessingSelection) {
           const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
           if (range && textElement.contains(range.commonAncestorContainer)) {
-            console.log('Keyboard selection detected');
-            handleSelection();
+            console.log('Desktop selection detected:', selectedText.substring(0, 30) + '...');
+            await handleSelection();
           }
         }
-      }, 100);
+      }, 500); // Increased delay to ensure selection is complete
     });
   }
 
@@ -1640,3 +2020,18 @@ try {
   console.error('Failed to initialize document:', error);
 }
 });
+
+function calculateScore(phrases) {
+  let totalScore = 0;
+  
+  phrases.forEach(phrase => {
+    // Only score phrases that have actually been discovered (have a score > 0)
+    let phraseScore = word_scores[phrase] || 0;
+    
+    // No automatic base scores - phrases only get points when discovered
+    totalScore += phraseScore;
+  });
+  
+  console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
+  return totalScore;
+}

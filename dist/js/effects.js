@@ -464,8 +464,27 @@ export function performBucketReorder() {
   // Get all bucket elements
   const buckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
 
-  // Sort buckets by score (highest first), then count (highest first), then alphabetically
-  buckets.sort((a, b) => {
+  console.log('All buckets found:', buckets.map(b => b.id));
+
+  // Find the "Yours" bucket
+  const yoursBucket = buckets.find(bucket => bucket.id === 'bucket-yours');
+  console.log('Yours bucket found:', yoursBucket ? yoursBucket.id : 'NOT FOUND');
+
+  // If "Yours" bucket exists and is not already first, move it to the front
+  if (yoursBucket && buckets[0] !== yoursBucket) {
+    console.log('Moving Yours bucket to front position');
+    bucketContainer.insertBefore(yoursBucket, bucketContainer.firstChild);
+  }
+
+  // Now get the updated order after moving "Yours" to front
+  const updatedBuckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
+
+  // Separate "Yours" bucket from others (should be first now)
+  const otherBuckets = updatedBuckets.slice(1); // Skip the first bucket (Yours)
+  console.log('Other buckets after moving Yours:', otherBuckets.map(b => b.id));
+
+  // Sort other buckets by score (highest first), then count (highest first), then alphabetically
+  otherBuckets.sort((a, b) => {
     const categoryA = a.id.replace('bucket-', '');
     const categoryB = b.id.replace('bucket-', '');
 
@@ -488,9 +507,13 @@ export function performBucketReorder() {
     return categoryA.localeCompare(categoryB);
   });
 
+  // Create new order with "Yours" always first, then sorted others
+  const newOrder = yoursBucket ? [yoursBucket, ...otherBuckets] : otherBuckets;
+  console.log('Final new order:', newOrder.map(b => b.id));
+
   // Check if reordering is actually needed
   const currentOrder = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
-  const needsReorder = buckets.some((bucket, index) => bucket !== currentOrder[index]);
+  const needsReorder = newOrder.some((bucket, index) => bucket !== currentOrder[index]);
 
   if (!needsReorder) {
     console.log('Buckets already in correct order, skipping animation');
@@ -499,19 +522,20 @@ export function performBucketReorder() {
 
   // Use a fade-based reordering animation
   // First, fade out all buckets
-  gsap.to(buckets, {
+  gsap.to(newOrder, {
     opacity: 0.3,
     duration: 0.2,
     ease: "power1.out"
   });
 
-  // Reorder DOM elements while faded
-  buckets.forEach((bucket) => {
+  // Clear the container and append in the new order
+  bucketContainer.innerHTML = '';
+  newOrder.forEach((bucket) => {
     bucketContainer.appendChild(bucket);
   });
 
   // Fade back in with a slight stagger
-  gsap.to(buckets, {
+  gsap.to(newOrder, {
     opacity: 1,
     duration: 0.3,
     ease: "power1.out",
@@ -519,8 +543,8 @@ export function performBucketReorder() {
     stagger: 0.02
   });
 
-  console.log('Category buckets reordered by score then count:',
-    buckets.map(b => {
+  console.log('Category buckets reordered by score then count (Yours always first):',
+    newOrder.map(b => {
       const category = b.id.replace('bucket-', '');
       const count = getGlobalCategoryCount(category) || 0;
       const score = Math.round(getGlobalCategoryScore(category) || 0);

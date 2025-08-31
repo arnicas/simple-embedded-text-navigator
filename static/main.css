@@ -70,6 +70,7 @@ body {
 
 #textContainer {
     width: 100%;
+    min-height: 250px; /* Add minimum height to prevent frequent resizing */
     max-height: 60vh;
     max-width: 650px;
     background-color: white;
@@ -77,6 +78,9 @@ body {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     margin-bottom: 20px;
+    display: flex; /* Add flexbox for centering */
+    align-items: center; /* Center vertically */
+    justify-content: center; /* Center horizontally */
 }
 
 /* Mobile improvements */
@@ -97,6 +101,10 @@ body {
         padding: 15px;
         margin: 10px;
         max-width: calc(100% - 20px);
+        min-height: 200px; /* Add minimum height for mobile to prevent resizing */
+        display: flex; /* Add flexbox for centering */
+        align-items: center; /* Center vertically */
+        justify-content: center; /* Center horizontally */
     }
     
     #text, #animation {

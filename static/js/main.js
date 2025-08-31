@@ -35,7 +35,7 @@ let currentResult = null; // Will be set to random quote on initialization
 let alreadySeen = [];
 let scores = {};
 
-// ===== METADATA DISCOVERY SCORING CONFIGURATION =====
+// ===== METADATA DISCOVERY SCORES CONFIGURATION =====
 // These values can be easily modified to adjust scoring for new discoveries
 // Points are awarded when users find new content through text selection
 const METADATA_DISCOVERY_SCORES = {
@@ -128,12 +128,11 @@ async function loadFiles() {
     categories.yours = [...userYoursWords];
     console.log('Initialized "Yours" category with user words:', userYoursWords);
     
-    // Ensure all user words have at least 1 point in word_scores
+    // Add new words to word_scores (but don't give them scores until discovered)
     userYoursWords.forEach(word => {
       const normalizedWord = word.toLowerCase();
-      if (!(normalizedWord in word_scores) || word_scores[normalizedWord] === 0) {
-        word_scores[normalizedWord] = 1;
-      }
+      // Don't add to word_scores until the phrase is actually discovered in text
+      // This ensures the modal only shows actually discovered items
     });
     
     // Initialize global data for "Yours" category
@@ -438,25 +437,11 @@ function calculateCategoryScore(phrases) {
 }
 
 function getWordScoreDisplay(phrase) {
-  // Split phrase into words and calculate total score
-  const words = phrase.toLowerCase().split(/\s+/);
-  let totalScore = 0;
+  // Only show scores for phrases that have actually been discovered
+  let phraseScore = word_scores[phrase] || 0;
   
-  words.forEach(word => {
-    let score = word_scores[word] || 0;
-    
-    // Special case for "Yours" category: ensure all words get at least 1 point
-    if (categories.yours && categories.yours.includes(word) && score === 0) {
-      score = 1;
-      // Also update word_scores to persist this
-      word_scores[word] = 1;
-    }
-    
-    totalScore += score;
-  });
-  
-  // Show phrase with total score instead of individual word scores
-  return { display: `${phrase} (${totalScore} pts)`, totalScore };
+  // No automatic base scores - phrases only get points when discovered
+  return { display: `${phrase} (${phraseScore} pts)`, totalScore: phraseScore };
 }
 
 function createMetadataBuckets() {
@@ -761,14 +746,11 @@ function saveYoursChanges() {
     }
   });
   
-  // Add new words to word_scores with +1 score each
+  // Add new words to word_scores (but don't give them scores until discovered)
   userYoursWords.forEach(word => {
     const normalizedWord = word.toLowerCase();
-    // Always ensure user words have at least 1 point
-    if (!(normalizedWord in word_scores) || word_scores[normalizedWord] === 0) {
-      word_scores[normalizedWord] = 1; // Each word gets +1 score
-    }
-    // If the word already has a score > 1, we keep the existing score
+    // Don't add to word_scores until the phrase is actually discovered in text
+    // This ensures the modal only shows actually discovered items
   });
 
   // Update the categories data structure
@@ -782,7 +764,7 @@ function saveYoursChanges() {
   recalculateYoursCategory();
   
   console.log('Saved "Yours" category words:', userYoursWords);
-  console.log('Added to word_scores with +1 each:', Object.keys(word_scores).filter(word => word_scores[word] === 1));
+  console.log('User words added to "Yours" category - they will get scores when discovered in text');
 
   hideYoursEditModal();
 
@@ -820,15 +802,19 @@ function recalculateYoursCategory() {
     globalCategoryScores.yours = 0;
   }
   
-  // Recalculate based on current word_scores for user words
+  // Clear existing matches - we'll rebuild based on actual discoveries
+  globalCategoryMatches.yours.clear();
+  
+  // Recalculate based on actual discoveries in word_scores
   let totalScore = 0;
   let totalCount = 0;
   
   userYoursWords.forEach(word => {
     const normalizedWord = word.toLowerCase();
-    const wordScore = word_scores[normalizedWord] || 1; // Default to 1 if not found
+    let wordScore = word_scores[normalizedWord] || 0;
     
-    // Add to global matches if it has a score > 0
+    // Only include items that have been actually discovered in text (score > 0)
+    // Items added by user but not yet discovered will have score 0 and won't appear
     if (wordScore > 0) {
       globalCategoryMatches.yours.add(word);
       totalScore += wordScore;
@@ -2034,3 +2020,18 @@ try {
   console.error('Failed to initialize document:', error);
 }
 });
+
+function calculateScore(phrases) {
+  let totalScore = 0;
+  
+  phrases.forEach(phrase => {
+    // Only score phrases that have actually been discovered (have a score > 0)
+    let phraseScore = word_scores[phrase] || 0;
+    
+    // No automatic base scores - phrases only get points when discovered
+    totalScore += phraseScore;
+  });
+  
+  console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
+  return totalScore;
+}

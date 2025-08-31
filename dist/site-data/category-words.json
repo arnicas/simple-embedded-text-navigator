@@ -1,4 +1,5 @@
 {
+    "yours": [],
     "person": [
         "old woman",
         "old man",
@@ -33,6 +34,7 @@
         "fisherman",
         "wood-cutters",
         "hunter",
+        "hunters",
         "huntsman",
         "servant",
         "farmer",
@@ -144,6 +146,8 @@
         "rainbow",
         "snow",
         "snowflake",
+        "snow-flakes",
+        "snowflakes",
         "rain",
         "rainy",
         "cloud",
@@ -192,8 +196,10 @@
         "queen",
         "kings",
         "princes",
+        "emperor",
         "duke",
         "dukes",
+        "kingdom",
         "duchess",
         "duchesses",
         "crown",
@@ -284,6 +290,8 @@
         "horse",
         "swan",
         "swans",
+        "seals",
+        "carp",
         "shark",
         "toad",
         "frog",
@@ -424,6 +432,7 @@
     ],
     "landscape": [
         "great stone",
+        "large stone",
         "ground",
         "earth",
         "grass",
@@ -437,6 +446,7 @@
         "hills",
         "town",
         "country",
+        "city",
         "cliff",
         "cliffs",
         "land",
@@ -459,11 +469,15 @@
         "cherries",
         "cherry",
         "plum",
+        "the orange",
+        "oranges",
+        "an orange",
         "blackberry",
         "plums",
         "nuts",
         "nut",
         "berries",
-        "berry"
+        "berry",
+        "barberry"
     ]
 }
