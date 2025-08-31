@@ -123,6 +123,22 @@ async function loadFiles() {
   // Count unique metadata in the dataset
   countDatasetMetadata();
   
+  // Initialize "Yours" category with user words if they exist
+  if (userYoursWords && userYoursWords.length > 0) {
+    categories.yours = [...userYoursWords];
+    console.log('Initialized "Yours" category with user words:', userYoursWords);
+    
+    // Ensure all user words have at least 1 point in word_scores
+    userYoursWords.forEach(word => {
+      const normalizedWord = word.toLowerCase();
+      if (!(normalizedWord in word_scores) || word_scores[normalizedWord] === 0) {
+        word_scores[normalizedWord] = 1;
+      }
+    });
+    
+    // Initialize global data for "Yours" category
+    recalculateYoursCategory();
+  }
 }
 
 function countDatasetMetadata() {
@@ -404,7 +420,15 @@ function calculateCategoryScore(phrases) {
     const words = phrase.toLowerCase().split(/\s+/);
     words.forEach(word => {
       // Look up word score, default to 0 if not found
-      const wordScore = word_scores[word] || 0;
+      let wordScore = word_scores[word] || 0;
+      
+      // Special case for "Yours" category: ensure all words get at least 1 point
+      if (categories.yours && categories.yours.includes(word) && wordScore === 0) {
+        wordScore = 1;
+        // Also update word_scores to persist this
+        word_scores[word] = 1;
+      }
+      
       totalScore += wordScore;
     });
   });
@@ -419,7 +443,15 @@ function getWordScoreDisplay(phrase) {
   let totalScore = 0;
   
   words.forEach(word => {
-    const score = word_scores[word] || 0;
+    let score = word_scores[word] || 0;
+    
+    // Special case for "Yours" category: ensure all words get at least 1 point
+    if (categories.yours && categories.yours.includes(word) && score === 0) {
+      score = 1;
+      // Also update word_scores to persist this
+      word_scores[word] = 1;
+    }
+    
     totalScore += score;
   });
   
@@ -713,10 +745,26 @@ function removeYoursWord(index) {
 }
 
 function saveYoursChanges() {
-  // Add user words to the word_scores with +1 score each
+  // Store the previous words to check what was removed
+  const previousWords = new Set(categories.yours || []);
+  const newWords = new Set(userYoursWords);
+  
+  // Remove words that were deleted from word_scores (but keep their scores if they were found)
+  previousWords.forEach(word => {
+    if (!newWords.has(word)) {
+      const normalizedWord = word.toLowerCase();
+      // Only remove from word_scores if it was a user-added word (score = 1)
+      // Don't remove if it has a higher score from being found
+      if (word_scores[normalizedWord] === 1) {
+        delete word_scores[normalizedWord];
+      }
+    }
+  });
+  
+  // Add new words to word_scores with +1 score each
   userYoursWords.forEach(word => {
     const normalizedWord = word.toLowerCase();
-    // Only set to +1 if the word doesn't already have a score, or if it has 0
+    // Always ensure user words have at least 1 point
     if (!(normalizedWord in word_scores) || word_scores[normalizedWord] === 0) {
       word_scores[normalizedWord] = 1; // Each word gets +1 score
     }
@@ -726,13 +774,13 @@ function saveYoursChanges() {
   // Update the categories data structure
   categories.yours = [...userYoursWords];
 
-  // Clear the global matches and counts for "yours" to force recalculation
-  if (globalCategoryMatches.yours) {
-    globalCategoryMatches.yours.clear();
-  }
-  globalCategoryCounts.yours = 0;
-  globalCategoryScores.yours = 0;
-
+  // DON'T clear the global matches - preserve existing discoveries
+  // Only update the counts and scores based on current state
+  updateYoursScoreDisplay();
+  
+  // Recalculate "Yours" category scores and matches
+  recalculateYoursCategory();
+  
   console.log('Saved "Yours" category words:', userYoursWords);
   console.log('Added to word_scores with +1 each:', Object.keys(word_scores).filter(word => word_scores[word] === 1));
 
@@ -756,6 +804,48 @@ function saveYoursChanges() {
 
 function cancelYoursChanges() {
   hideYoursEditModal();
+}
+
+function recalculateYoursCategory() {
+  // Initialize global matches for "yours" if it doesn't exist
+  if (!globalCategoryMatches.yours) {
+    globalCategoryMatches.yours = new Set();
+  }
+  
+  // Initialize global counts and scores for "yours" if they don't exist
+  if (!globalCategoryCounts.yours) {
+    globalCategoryCounts.yours = 0;
+  }
+  if (!globalCategoryScores.yours) {
+    globalCategoryScores.yours = 0;
+  }
+  
+  // Recalculate based on current word_scores for user words
+  let totalScore = 0;
+  let totalCount = 0;
+  
+  userYoursWords.forEach(word => {
+    const normalizedWord = word.toLowerCase();
+    const wordScore = word_scores[normalizedWord] || 1; // Default to 1 if not found
+    
+    // Add to global matches if it has a score > 0
+    if (wordScore > 0) {
+      globalCategoryMatches.yours.add(word);
+      totalScore += wordScore;
+      totalCount++;
+    }
+  });
+  
+  // Update global counts and scores
+  globalCategoryCounts.yours = totalCount;
+  globalCategoryScores.yours = totalScore;
+  
+  console.log(`Recalculated "Yours" category: ${totalCount} words, ${totalScore} points`);
+  console.log('Updated global counts and scores for "yours":', globalCategoryCounts.yours, globalCategoryScores.yours);
+  
+  // Update the display
+  updateYoursScoreDisplay();
+  updateTotalDisplay();
 }
 
 function showMetadataModal(metadataType, imageSrc) {
@@ -1031,6 +1121,9 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   // Store the total score to be celebrated later, don't celebrate immediately
   // This prevents multiple celebrations if this function is called multiple times
   window.pendingCategoryScore = (window.pendingCategoryScore || 0) + totalNewScore;
+  
+  // Update total display after category scoring is processed
+  updateTotalDisplay();
 }
 
 function triggerPendingCategoryCelebration() {
@@ -1039,6 +1132,9 @@ function triggerPendingCategoryCelebration() {
     console.log(`Triggering accumulated category celebration: ${window.pendingCategoryScore}pts`);
     showCategoryScoreCelebration(Math.round(window.pendingCategoryScore));
     window.pendingCategoryScore = 0; // Reset after celebrating
+    
+    // Update total display after celebration is triggered
+    updateTotalDisplay();
   }
 }
 
@@ -1115,13 +1211,23 @@ function updateYoursScoreDisplay() {
 }
 
 function updateTotalDisplay() {
-  const totalPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
+  // Calculate total category points
+  const categoryPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
+  
+  // Calculate total metadata points
+  const metadataPoints = (globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR) +
+                        (globalMetadataCounts.books * METADATA_DISCOVERY_SCORES.NEW_BOOK) +
+                        (globalMetadataCounts.stories * METADATA_DISCOVERY_SCORES.NEW_STORY);
+  
+  // Total points is sum of both
+  const totalPoints = categoryPoints + metadataPoints;
+  
   const totalPointsElement = document.getElementById('metadata-count-total');
 
   if (totalPointsElement) {
     totalPointsElement.textContent = `${Math.round(totalPoints)} pts`;
     totalPointsElement.style.display = 'inline';
-    console.log(`Set total points display to: ${Math.round(totalPoints)} pts`);
+    console.log(`Set total points display to: ${Math.round(totalPoints)} pts (Categories: ${Math.round(categoryPoints)}, Metadata: ${Math.round(metadataPoints)})`);
   }
 }
 
@@ -1554,6 +1660,9 @@ function calculateAndCelebrateMetadataScore() {
     newStory: null,
     totalPoints: 0
   };
+  
+  // Update total display after metadata discoveries are processed
+  updateTotalDisplay();
 }
 
 
@@ -1815,11 +1924,10 @@ try {
       // Capture the range BEFORE clearing the selection
       const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
-      // Clear the selection after a short delay to prevent mobile selection bugs
-      // but not immediately to avoid interrupting desktop selection
+      // Clear the selection after a longer delay to allow users to see their selection
       setTimeout(() => {
         clearTextSelection();
-      }, 50);
+      }, 300); // Increased delay to give users time to see their selection
 
       // Process the selection with the captured range
       await processSelection(textElement, selectedText, range);
@@ -1867,7 +1975,7 @@ try {
           console.log('Mobile touch selection detected:', selectedText.substring(0, 30) + '...');
           await handleSelection();
         }
-      }, 300); // Longer delay for mobile
+      }, 400); // Increased delay for mobile touch selection
     });
 
     // Also listen for selection changes on mobile
@@ -1891,7 +1999,7 @@ try {
             await handleSelection();
           }
         }
-      }, 250); // Delay for mobile
+      }, 400); // Increased delay for mobile selection
     });
 
   } else {
@@ -1918,7 +2026,7 @@ try {
             await handleSelection();
           }
         }
-      }, 200); // Delay to ensure selection is complete
+      }, 500); // Increased delay to ensure selection is complete
     });
   }
 
