@@ -41,7 +41,7 @@
                 </div>
                 <div class="help-section">
                     <h3>Who Made This, More Info?</h3>
-                    <p>I've been messing with the core browser similarity stuff and dataset for a year now. This was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tale content. I did get Claude's help to finish this version of the UI (it doesn't understand gsap animation very well). Made by <b></bold>@arnicas/Lynn Cherny</b> on <a href="https://x.com/arnicas">X</a>, <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, and the repo is at the badly named <a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>.</p>
+                    <p>Made by <b></bold><a href="http://www.ghostweather.com">@arnicas/Lynn Cherny</b></a> on <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, <a href="https://x.com/arnicas">X</a> and the repo is at the badly named <a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>. I've been messing with the core browser similarity stuff and dataset for a year now. This was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tale content. I did get Claude's help to finish this version of the UI (it doesn't understand gsap animation very well). .</p>
                 </div>
             </div>
         </div>
@@ -102,8 +102,10 @@
 
             <h1 id="appTitle">Fairy Tale Text Hunt</h1>
             
+            <div id="metadataContainer">
+                <div id="metadataBuckets"></div>
+            </div>
             <div id="instructions">Select a section of text (a few words) with your mouse or finger to find a new line!</div>
-            
             <div id="textContainer">
                 <div id="text">Loading a random fairy tale passage...</div>
                 <div id="animation"></div>
@@ -119,9 +121,6 @@
                 </div>
             </div>
             <div id="categoryContainer">
-                <div id="metadataContainer">
-                    <div id="metadataBuckets"></div>
-                </div>
                 <div id="categoryBuckets"></div>
             </div>
         </div> 
