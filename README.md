@@ -1,11 +1,10 @@
 
-## Simple Embedded Text Navigator
+## Simple Embedded Text Navigator (for Fairy Tales)
 
 
 # Overview
 
 This is now an overloaded fairy tale hunter app with scoring etc. Mea culpa. The key elements are these:
-
 
 * The [client-vector-search](https://github.com/yusufhilmi/client-vector-search#readme) node package.
 * [Transformers.js](https://huggingface.co/docs/transformers.js/en/index) from HuggingFace.
@@ -79,22 +78,26 @@ async function loadFiles() {
 If there is interest, I could add a skeleton version that doesn't have all the UI cruft Claude kept talking me into (and then being meh at).
 
 
-## During dev
+## Running During dev
+
+node install first. It uses parcel.
 
 `npm install`
 
 `npm run build` (makes dist folder)
 
-`npm run start`
+`npm run start` (to launch the dev server)
  
 
 ## Updating the Words that Match
 
 You can edit the file in static/site-data/category-words.json.  Then run the python script `python/word-scores-standalone.py` in the python folder to update the scores.json files. It has paths set to the static/site-data folder.
 
-## Deployment 
+During play, you can also add words or phrases to the Yours category. They will all be default 1 point, though.
 
-It's only a browser app, so you can just run index wiht the dist folder.  For doing this as a github page, you need a .github/worflows/static.yaml file with the instruction to copy dist (along with other things):
+## Deployment on Pages If You Want
+
+It's only a browser app, so you can just run index with the dist folder.  For doing this as a github page, you need a .github/worflows/static.yaml file with the instruction to copy dist (along with other things):
 
 ```
 jobs:
@@ -118,6 +121,15 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 ```
+
+
+## Sources and AI Use
+
+I used [this codepen from Chris Smith](https://codepen.io/BlogFire/pen/LYoRWLe)to get the torn edge effect.
+
+I used a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> to make the medieval-cartoon style icons.
+
+The UI code was done with extensive AI help from mostly Claude and Gemini Pro 2.5. So it's a mess and needs some cleanup (working on it).  This was a bit of a process. They still have a ways to go with understanding DOM animation and CSS, imo.
 
 
 ## License

@@ -13,7 +13,12 @@
     <script type="module" src="static/js/main.js"></script>
 </head>
 <body>
-
+    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
+        <filter id="torn">
+            <feTurbulence x="0" y="0" baseFrequency="0.02" numOctaves="6" seed="5" />
+            <feDisplacementMap in="SourceGraphic" scale="12" />
+        </filter>
+    </svg>
     <div class="container">
         <!-- Help/Info button -->
         <div id="helpButton">?</div>
@@ -32,16 +37,16 @@
                     <p>Numbers show how many times each theme has appeared in your exploration, and how rare something is. Higher scores are given for rarer items. They were originally seeded by looking at top unigram and bigrams, then added to during use and weighted with Claude's help and some python code. I have no doubt missed many and am updating as I play it. The icons were made with a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> that uses a Flux Lora for a medieval style and adds a label.</p>
                 </div>
                 <div class="help-section">
-                    <h3>Selection Similarity via Embeddings</h3>
+                    <h3>🧭 Selection Similarity via Embeddings</h3>
                     <p>The similarity score under the text shows how "similar" a new text is to what you selected. This app uses a tiny embedding model, <a href="https://huggingface.co/TaylorAI/bge-micro">bge-micro,</a> with <a href="https://huggingface.co/docs/transformers.js/en/index">Transformers.js</a> from Huggingface. The index and similarity in the browser are handled with client-vector-search, a node package. The background color changes slightly depending on how high the similarity score is.</p>
                 </div>
                 <div class="help-section">
-                    <h3>Text Sources and Caveats</h3>
-                    <p>The text is sourced from Project Gutenberg book fairy tales, processed into sentences and then classified for "descriptiveness" after training a small spaCy model. The dataset was later reduced quite a bit to a very few authors (4!), for this demo app. You can discover and get points for finding the sources, too. There may still be duplicate stories (depending on the book collection) and there may also be lines that contain offensive text (racism, sexism, gore) for today's readers.</p>
+                    <h3>📜 Text Sources and Caveats</h3>
+                    <p>The text is sourced from <a href="https://www.gutenberg.org/">Project Gutenberg</a> book fairy tales, processed into sentences and then classified for "descriptiveness" using a small trained custom spaCy model. The dataset was later reduced quite a bit to a very few authors (4!) for this demo app. There may still be duplicate stories (depending on the book collection) and there may also be lines that contain offensive text (racism, sexism, violence and gore) for today's readers.</p>
                 </div>
                 <div class="help-section">
                     <h3>Who Made This, More Info?</h3>
-                    <p>Made by <b></bold><a href="http://www.ghostweather.com">@arnicas/Lynn Cherny</b></a> on <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, <a href="https://x.com/arnicas">X</a> and the repo is at the badly named <a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>. I've been messing with the core browser similarity stuff and dataset for a year now. This was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tale content. I did get Claude's help to finish this version of the UI (it doesn't understand gsap animation very well). .</p>
+                    <p>Made by <b></bold><a href="http://ghostweather.com">@arnicas/Lynn Cherny</b></a> who is on <a href="https://bsky.app/profile/arnicas.bsky.social">Bluesky</a>, <a href="https://mstdn.social/@arnicas">mastodon</a>, <a href="https://x.com/arnicas">X</a>; the repo is at the badly named <a href="https://github.com/arnicas/simple-embedded-text-navigator">github.com/arnicas/simple-embedded-text-navigator</a>. I've been messing with the core browser similarity stuff and dataset for a year now. This was originally both a tech demo (making an in-browser fairy tale text navigator) and a toy for me to look at fairy tale content.</p>
                 </div>
             </div>
         </div>
