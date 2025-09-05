@@ -104,6 +104,9 @@ body {
 .container {
     display: flex;
     position: relative;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 
@@ -172,6 +175,7 @@ body {
     align-items: center; /* Center vertically */
     justify-content: center; /* Center horizontally */
     position: relative;
+    isolation: isolate; /* Creates new stacking context for z-index */
 }
 
 #textContainer::after {
@@ -181,9 +185,20 @@ body {
     width: 100%;
     background: #fefced;
     box-shadow: 0 0 0 0.04em #fff, 0.2em 0.2em 0.8em -0.2em #3d3d3d,
-            0 0 8em #f7e98e inset;
+            0 0 8em #ebdf92 inset;
     filter: url(#torn);
     z-index: -1;
+}
+
+#contentWrapper {
+    background-color: #f4ead2; /* Off-white background */
+    border: 1px solid #e0e0e0; /* Thin grey border */
+    padding: 10px 20px;
+    border-radius: 4px;
+    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /* Add subtle inner glow for manuscript feel */
@@ -670,7 +685,7 @@ body {
     height: 40px;
     border-radius: 50%;
     background: rgba(218, 165, 32, 0.95);
-    color: #8B4513;
+    color:  #DAA520 0.95;
     border: 2px solid rgba(184, 134, 11, 0.6);
     font-size: 24px;
     font-weight: normal;
