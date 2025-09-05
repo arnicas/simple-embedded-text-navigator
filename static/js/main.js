@@ -380,11 +380,9 @@ function getCategory(text) {
   const matches = [];
   const textLower = text.toLowerCase();
   
-  // Search through each category
   for (const [categoryName, phrases] of Object.entries(categories)) {
+    // Step 1: Find all unique phrases that are present in the text.
     const matchedPhrases = [];
-    
-    // Check each phrase in the category (using word boundaries)
     for (const phrase of phrases) {
       const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
       if (regex.test(textLower)) {
@@ -392,49 +390,37 @@ function getCategory(text) {
       }
     }
     
-    // Filter out overlapping phrases (prioritize longer ones)
     if (matchedPhrases.length > 0) {
+      // Step 2: Filter the found phrases to resolve overlaps (e.g., prefer "large stone" over "stone").
       const filteredPhrases = filterOverlappingPhrases(matchedPhrases, textLower);
       
       if (filteredPhrases.length > 0) {
-        // Calculate total score for this category
-        const categoryScore = calculateCategoryScore(filteredPhrases);
+        // Step 3: Count the occurrences of only the filtered, valid phrases.
+        const phraseCounts = {};
+        let totalScoreForCategory = 0;
         
-        matches.push({
-          category: categoryName,
-          phrases: filteredPhrases,
-          score: categoryScore
+        filteredPhrases.forEach(phrase => {
+          const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+          const occurrences = (textLower.match(regex) || []).length;
+          if (occurrences > 0) {
+            phraseCounts[phrase] = occurrences;
+            totalScoreForCategory += occurrences * getPhraseScore(phrase);
+          }
         });
+
+        // Step 4: Add the results for this category to our final list.
+        if (Object.keys(phraseCounts).length > 0) {
+            matches.push({
+              category: categoryName,
+              phrases: phraseCounts, // Return object with phrases and their counts
+              score: totalScoreForCategory // Return the accurately calculated total score
+            });
+        }
       }
     }
   }
   
   return matches;
-}
-
-function calculateCategoryScore(phrases) {
-  let totalScore = 0;
-  
-  phrases.forEach(phrase => {
-    // Split phrase into individual words and sum their scores
-    const words = phrase.toLowerCase().split(/\s+/);
-    words.forEach(word => {
-      // Look up word score, default to 0 if not found
-      let wordScore = word_scores[word] || 0;
-      
-      // Special case for "Yours" category: ensure all words get at least 1 point
-      if (categories.yours && categories.yours.includes(word) && wordScore === 0) {
-        wordScore = 1;
-        // Also update word_scores to persist this
-        word_scores[word] = 1;
-      }
-      
-      totalScore += wordScore;
-    });
-  });
-  
-  console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
-  return totalScore;
 }
 
 function getWordScoreDisplay(phrase) {
@@ -449,7 +435,15 @@ function getPhraseScore(phrase) {
   let score = 0;
   const words = phrase.toLowerCase().split(/\s+/);
   words.forEach(word => {
-    score += word_scores[word] || 0;
+    // Look up word score, default to 0 if not found
+    let wordScore = word_scores[word] || 0;
+      
+    // Special case for "Yours" category: ensure all user-added words get at least 1 point
+    if (wordScore === 0 && categories.yours && categories.yours.includes(word)) {
+      wordScore = 1;
+    }
+
+    score += wordScore;
   });
   return score;
 }
@@ -826,7 +820,7 @@ function cancelYoursChanges() {
 function recalculateYoursCategory() {
   // Initialize global matches for "yours" if it doesn't exist
   if (!globalCategoryMatches.yours) {
-    globalCategoryMatches.yours = new Set();
+    globalCategoryMatches.yours = {};
   }
   
   // Initialize global counts and scores for "yours" if they don't exist
@@ -838,7 +832,7 @@ function recalculateYoursCategory() {
   }
   
   // Clear existing matches - we'll rebuild based on actual discoveries
-  globalCategoryMatches.yours.clear();
+  // globalCategoryMatches.yours.clear();
   
   // Recalculate based on actual discoveries in word_scores
   let totalScore = 0;
@@ -851,7 +845,8 @@ function recalculateYoursCategory() {
     // Only include items that have been actually discovered in text (score > 0)
     // Items added by user but not yet discovered will have score 0 and won't appear
     if (wordScore > 0) {
-      globalCategoryMatches.yours.add(word);
+      // Correctly increment the count for the word in our frequency map (object)
+      globalCategoryMatches.yours[word] = (globalCategoryMatches.yours[word] || 0) + 1;
       totalScore += wordScore;
       totalCount++;
     }
@@ -1012,7 +1007,8 @@ function highlightPhrasesInText(text, categories) {
   
   categories.forEach(match => {
     console.log(`Processing category: ${match.category} with phrases:`, match.phrases);
-    match.phrases.forEach(phrase => {
+    // The `phrases` property is now an object of counts, e.g., { "sun": 2 }. We need to iterate over its keys.
+    Object.keys(match.phrases).forEach(phrase => {
       const escapedWord = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       
       // This regex uses a word boundary to find the start of the word,
@@ -1117,17 +1113,21 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   
   const processMatches = (matches) => {
     matches.forEach(match => {
-      newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
+      const phraseCounts = match.phrases; // e.g., { "sun": 3, "moon": 1 }
+      const totalItemsInCategory = Object.values(phraseCounts).reduce((sum, count) => sum + count, 0);
+
+      newCounts[match.category] = (newCounts[match.category] || 0) + totalItemsInCategory;
       newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
       
       if (!globalCategoryMatches[match.category]) {
         globalCategoryMatches[match.category] = {};
       }
       
-      match.phrases.forEach(phrase => {
+      // Increment the global frequency map for each phrase
+      for (const [phrase, count] of Object.entries(phraseCounts)) {
         const p = phrase.toLowerCase();
-        globalCategoryMatches[match.category][p] = (globalCategoryMatches[match.category][p] || 0) + 1;
-      });
+        globalCategoryMatches[match.category][p] = (globalCategoryMatches[match.category][p] || 0) + count;
+      }
     });
   };
 
@@ -1324,7 +1324,7 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
   selectedCategories.forEach(match => {
     const bucket = document.getElementById(`bucket-${match.category}`);
     if (bucket) {
-      bucket.title = `Selected: ${match.phrases.join(', ')}`;
+      bucket.title = `Selected: ${Object.keys(match.phrases).join(', ')}`;
     }
   });
   
@@ -1333,11 +1333,12 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
     const bucket = document.getElementById(`bucket-${match.category}`);
     if (bucket) {
       // Add to existing tooltip or create new one
+      const phraseString = Object.keys(match.phrases).join(', ');
       const existingTitle = bucket.title;
       if (existingTitle) {
-        bucket.title = `${existingTitle} | Found: ${match.phrases.join(', ')}`;
+        bucket.title = `${existingTitle} | Found: ${phraseString}`;
       } else {
-        bucket.title = `Found: ${match.phrases.join(', ')}`;
+        bucket.title = `Found: ${phraseString}`;
       }
     }
   });
