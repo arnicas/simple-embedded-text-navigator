@@ -2,6 +2,86 @@
     --score-bg-color: #f0f0f0; /* Default background color */
 }
 
+/* ===== ANIMATION UTILITY CLASSES ===== */
+.hidden {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.phrase-highlight {
+    background: linear-gradient(135deg, rgba(218, 165, 32, 0.3) 0%, rgba(240, 230, 140, 0.4) 100%);
+    border-radius: 3px;
+    padding: 2px 4px;
+    margin: 0 1px;
+    transition: transform 0.8s ease, opacity 0.8s ease, border 0.8s ease, box-shadow 0.8s ease, border-radius 0.8s ease, padding 0.8s ease;
+    will-change: transform, opacity, background-color, border, box-shadow, border-radius, padding;
+    color: #000000 !important; /* Ensure text is always black and visible */
+    font-weight: normal; /* Keep normal font weight */
+}
+
+.phrase-highlight.active {
+    background: linear-gradient(135deg, rgba(218, 165, 32, 0.4) 0%, rgba(240, 230, 140, 0.5) 100%);
+    border-radius: 3px;
+    padding: 2px 4px;
+    margin: 0 1px;
+    box-shadow: 0 1px 3px rgba(218, 165, 32, 0.2);
+}
+
+.phrase-highlight.faded {
+    background: rgba(218, 165, 32, 0.08);
+    border-radius: 0;
+    padding: 2px 4px;
+    margin: 0 1px;
+    box-shadow: none;
+    transition: all 0.8s ease;
+}
+
+.phrase-highlight.background {
+    background: rgba(218, 165, 32, 0.1);
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+}
+
+.phrase-highlight.permanent {
+    background: rgba(218, 165, 32, 0.08);
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    /* Ensure this styling persists and doesn't get overridden */
+    background-color: rgba(218, 165, 32, 0.08) !important;
+}
+
+.phrase-highlight.hidden {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.word {
+    display: inline-block;
+    will-change: transform, opacity;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+/* FLIP animation support */
+.flip-container {
+    will-change: transform;
+    transform-origin: top left;
+}
+
+/* Smooth text transitions */
+.text-transition {
+    will-change: transform, opacity;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
 body {
     font-family: "Patrick Hand", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
     margin: auto;
@@ -415,7 +495,8 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Drop cap styling for the first letter */
+/* Drop cap styling for the first letter - COMMENTED OUT TO TEST SMOOTH ANIMATIONS */
+/*
 #text::first-letter {
     font-family: 'Cinzel Decorative', cursive;
     font-size: 3.2em;
@@ -431,12 +512,15 @@ body {
     border: 2px solid rgba(139, 69, 19, 0.3);
     box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
 }
+*/
 
-/* Improve text flow around drop cap */
+/* Improve text flow around drop cap - COMMENTED OUT TO TEST SMOOTH ANIMATIONS */
+/*
 #text {
     text-align: left;
     padding-left: 0.5em;
 }
+*/
 
 #relatedItems {
     font-size: 12px;

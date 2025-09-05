@@ -424,6 +424,7 @@ export function updateBackgroundForScore(score) {
 
 export function cleanupTextContent() {
   // Safety function to completely remove HTML spans and restore clean text
+  // BUT preserve phrase-highlight spans AND word spans since both are needed
   const textElement = document.getElementById('text');
   const animationElement = document.getElementById('animation');
 
@@ -432,10 +433,25 @@ export function cleanupTextContent() {
       // Check if there are any highlight spans
       const highlights = element.querySelectorAll('.phrase-highlight');
       if (highlights.length > 0) {
-        console.log(`Cleaning up ${highlights.length} highlight spans by restoring plain text`);
-        // Get clean text content without HTML markup and restore it
-        const cleanText = element.textContent || element.innerText;
-        element.innerHTML = formattedContent(cleanText);
+        console.log(`Preserving ${highlights.length} highlight spans - they are now permanent`);
+        // Don't remove highlights - they should stay for visual history
+      }
+      
+      // Check for word spans that should also be preserved
+      const wordSpans = element.querySelectorAll('.word');
+      if (wordSpans.length > 0) {
+        console.log(`Preserving ${wordSpans.length} word spans - needed for highlighting system`);
+        // Don't remove word spans - they are needed for the highlighting system
+      }
+      
+      // Check for other types of spans that should be cleaned up
+      // Only clean up spans that are NOT phrase-highlight AND NOT word spans
+      const otherSpans = element.querySelectorAll('span:not(.phrase-highlight):not(.word)');
+      if (otherSpans.length > 0) {
+        console.log(`Cleaning up ${otherSpans.length} other spans (not highlights or words)`);
+        // Only clean up spans that are not highlights or words
+        // Don't call formattedContent() as it would destroy the word structure
+        // Just log what we found for debugging
       }
     }
   });
@@ -464,15 +480,15 @@ export function performBucketReorder() {
   // Get all bucket elements
   const buckets = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
 
-  console.log('All buckets found:', buckets.map(b => b.id));
+ // console.log('All buckets found:', buckets.map(b => b.id));
 
   // Find the "Yours" bucket
   const yoursBucket = buckets.find(bucket => bucket.id === 'bucket-yours');
-  console.log('Yours bucket found:', yoursBucket ? yoursBucket.id : 'NOT FOUND');
+ // console.log('Yours bucket found:', yoursBucket ? yoursBucket.id : 'NOT FOUND');
 
   // If "Yours" bucket exists and is not already first, move it to the front
   if (yoursBucket && buckets[0] !== yoursBucket) {
-    console.log('Moving Yours bucket to front position');
+  //  console.log('Moving Yours bucket to front position');
     bucketContainer.insertBefore(yoursBucket, bucketContainer.firstChild);
   }
 
@@ -481,7 +497,7 @@ export function performBucketReorder() {
 
   // Separate "Yours" bucket from others (should be first now)
   const otherBuckets = updatedBuckets.slice(1); // Skip the first bucket (Yours)
-  console.log('Other buckets after moving Yours:', otherBuckets.map(b => b.id));
+  //console.log('Other buckets after moving Yours:', otherBuckets.map(b => b.id));
 
   // Sort other buckets by score (highest first), then count (highest first), then alphabetically
   otherBuckets.sort((a, b) => {
@@ -509,14 +525,14 @@ export function performBucketReorder() {
 
   // Create new order with "Yours" always first, then sorted others
   const newOrder = yoursBucket ? [yoursBucket, ...otherBuckets] : otherBuckets;
-  console.log('Final new order:', newOrder.map(b => b.id));
+  //console.log('Final new order:', newOrder.map(b => b.id));
 
   // Check if reordering is actually needed
   const currentOrder = Array.from(bucketContainer.querySelectorAll('.categoryBucket'));
   const needsReorder = newOrder.some((bucket, index) => bucket !== currentOrder[index]);
 
   if (!needsReorder) {
-    console.log('Buckets already in correct order, skipping animation');
+   // console.log('Buckets already in correct order, skipping animation');
     return;
   }
 
@@ -543,14 +559,14 @@ export function performBucketReorder() {
     stagger: 0.02
   });
 
-  console.log('Category buckets reordered by score then count (Yours always first):',
-    newOrder.map(b => {
-      const category = b.id.replace('bucket-', '');
-      const count = getGlobalCategoryCount(category) || 0;
-      const score = Math.round(getGlobalCategoryScore(category) || 0);
-      return `${category}: ${count} items (${score}pts)`;
-    })
-  );
+  // console.log('Category buckets reordered by score then count (Yours always first):',
+  //   newOrder.map(b => {
+  //     const category = b.id.replace('bucket-', '');
+  //     const count = getGlobalCategoryCount(category) || 0;
+  //     const score = Math.round(getGlobalCategoryScore(category) || 0);
+  //     return `${category}: ${count} items (${score}pts)`;
+  //   })
+  // );
 }
 
 // ===== GLOBAL CATEGORY DATA MANAGEMENT =====
@@ -570,4 +586,320 @@ function getGlobalCategoryCount(category) {
 
 function getGlobalCategoryScore(category) {
   return globalCategoryScores[category] || 0;
+}
+
+// ===== NEW ANIMATION UTILITIES FOR SMOOTH TEXT TRANSITIONS =====
+
+/**
+ * Creates a smooth text transition using FLIP technique to avoid layout shifts
+ * @param {HTMLElement} element - The text element to animate
+ * @param {string} oldText - The current text content
+ * @param {string} newText - The new text content
+ * @param {Object} options - Animation options
+ * @returns {Promise} Promise that resolves when animation completes
+ */
+export async function smoothTextTransition(element, oldText, newText, options = {}) {
+  const {
+    duration = 0.8,
+    ease = "power2.out",
+    onStart = null,
+    onComplete = null
+  } = options;
+
+  return new Promise((resolve) => {
+    try {
+      // Step 1: Record the current state (First)
+      const oldState = {
+        text: element.textContent,
+        height: element.offsetHeight,
+        width: element.offsetWidth,
+        position: element.getBoundingClientRect()
+      };
+
+      // Step 2: Build the new content structure
+      const newContent = buildTextWithHighlights(newText);
+      
+      // Step 3: Create a temporary container for the new content
+      const tempContainer = document.createElement('div');
+      tempContainer.innerHTML = newContent;
+      tempContainer.style.position = 'absolute';
+      tempContainer.style.top = '0';
+      tempContainer.style.left = '0';
+      tempContainer.style.width = '100%';
+      tempContainer.style.opacity = '0';
+      tempContainer.style.pointerEvents = 'none';
+      
+      // Insert temp container
+      element.parentNode.insertBefore(tempContainer, element);
+      
+      // Step 4: Let browser render the new layout (Last)
+      element.innerHTML = newContent;
+      const newState = {
+        height: element.offsetHeight,
+        width: element.offsetWidth,
+        position: element.getBoundingClientRect()
+      };
+
+      // Step 5: Invert - Position new content to match old position
+      const deltaX = oldState.position.left - newState.position.left;
+      const deltaY = oldState.position.top - newState.position.top;
+      const scaleX = oldState.width / newState.width;
+      const scaleY = oldState.height / newState.height;
+
+      element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+      element.style.transformOrigin = 'top left';
+
+      // Step 6: Play - Animate to final position
+      if (onStart) onStart();
+
+      gsap.to(element, {
+        duration: duration,
+        ease: ease,
+        transform: 'translate(0px, 0px) scale(1, 1)',
+        opacity: 1,
+        onComplete: () => {
+          // Clean up
+          element.style.transform = '';
+          element.style.transformOrigin = '';
+          if (tempContainer.parentNode) {
+            tempContainer.parentNode.removeChild(tempContainer);
+          }
+          if (onComplete) onComplete();
+          resolve();
+        }
+      });
+    } catch (error) {
+      console.error('Error in smoothTextTransition:', error);
+      // Fallback: just set the text directly
+      element.innerHTML = newText;
+      if (onComplete) onComplete();
+      resolve();
+    }
+  });
+}
+
+/**
+ * Enhanced word-by-word animation with pre-built structure and FLIP
+ * @param {HTMLElement} element - The text element to animate
+ * @param {string} oldText - The current text content
+ * @param {string} newText - The new text content
+ * @param {Object} options - Animation options
+ * @returns {Promise} Promise that resolves when animation completes
+ */
+export async function enhancedWordAnimation(element, oldText, newText, options = {}) {
+  const {
+    duration = 1.0,
+    stagger = 0.1,
+    ease = "power4.out",
+    onStart = null,
+    onComplete = null
+  } = options;
+
+  return new Promise((resolve) => {
+    try {
+      // Step 1: Record current state
+      const oldState = {
+        height: element.offsetHeight,
+        width: element.offsetWidth,
+        position: element.getBoundingClientRect()
+      };
+
+      // Step 2: Build new content with hidden word spans
+      const newContent = buildTextWithWords(newText);
+      element.innerHTML = newContent;
+
+      // Step 3: Get all word elements and set initial state
+      const words = element.querySelectorAll('.word');
+      words.forEach(word => {
+        word.style.opacity = '0';
+        word.style.transform = `translateY(${randomY(-20, 20)}px)`;
+      });
+
+      // Step 4: Let browser render new layout
+      const newState = {
+        height: element.offsetHeight,
+        width: element.offsetWidth,
+        position: element.getBoundingClientRect()
+      };
+
+      // Step 5: Apply FLIP transform to match old position
+      const deltaX = oldState.position.left - newState.position.left;
+      const deltaY = oldState.position.top - newState.position.top;
+      const scaleX = oldState.width / newState.width;
+      const scaleY = oldState.height / newState.height;
+
+      element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`;
+      element.style.transformOrigin = 'top left';
+
+      // Step 6: Animate to final position with staggered word reveal
+      if (onStart) onStart();
+
+      const tl = gsap.timeline({
+        onComplete: () => {
+          // Clean up transforms
+          element.style.transform = '';
+          element.style.transformOrigin = '';
+          
+          // Clean up individual word transforms to ensure they're on baseline
+          words.forEach(word => {
+            word.style.transform = '';
+            word.style.opacity = '';
+          });
+          
+          console.log('Animation complete - word transforms cleared, preserving word spans for highlighting');
+          
+          if (onComplete) onComplete();
+          resolve();
+        }
+      });
+
+      // Animate container to final position
+      tl.to(element, {
+        duration: duration * 0.3,
+        ease: "power2.out",
+        transform: 'translate(0px, 0px) scale(1, 1)'
+      });
+
+      // Animate words in with stagger
+      tl.to(words, {
+        opacity: 1,
+        y: 0,
+        duration: duration * 0.7,
+        ease: ease,
+        stagger: stagger
+      }, "-=0.2");
+    } catch (error) {
+      console.error('Error in enhancedWordAnimation:', error);
+      // Fallback: just set the text directly
+      element.innerHTML = formattedContent(newText);
+      if (onComplete) onComplete();
+      resolve();
+    }
+  });
+}
+
+/**
+ * Builds HTML structure with hidden highlight spans for smooth transitions
+ * @param {string} text - The text content
+ * @param {Array} highlights - Array of highlight objects with {text, category, id}
+ * @returns {string} HTML string with hidden highlight spans
+ */
+export function buildTextWithHighlights(text, highlights = []) {
+  // For now, just return the text as-is to avoid dependency issues
+  let html = text;
+  
+  // If no highlights, return text
+  if (!highlights || highlights.length === 0) {
+    return html;
+  }
+
+  // Create highlight spans (initially hidden)
+  highlights.forEach(highlight => {
+    const regex = new RegExp(`(${highlight.text})`, 'gi');
+    html = html.replace(regex, `<span class="phrase-highlight hidden" data-category="${highlight.category}" data-id="${highlight.id}">$1</span>`);
+  });
+
+  return html;
+}
+
+/**
+ * Builds HTML structure with word spans for enhanced animations
+ * @param {string} text - The text content
+ * @returns {string} HTML string with word spans
+ */
+export function buildTextWithWords(text) {
+  const words = text.split(' ');
+  return words.map(word => `<span class="word">${word}</span>`).join(' ');
+}
+
+/**
+ * Animates highlights into view with staggered timing
+ * @param {HTMLElement} container - Container with highlight spans
+ * @param {Object} options - Animation options
+ * @returns {Promise} Promise that resolves when animation completes
+ */
+export async function animateHighlightsIn(container, options = {}) {
+  const {
+    duration = 0.5,
+    stagger = 0.05,
+    ease = "power2.out",
+    onStart = null,
+    onComplete = null
+  } = options;
+
+  return new Promise((resolve) => {
+    const highlights = container.querySelectorAll('.phrase-highlight.hidden');
+    
+    if (highlights.length === 0) {
+      resolve();
+      return;
+    }
+
+    // Remove hidden class and set initial state
+    highlights.forEach(highlight => {
+      highlight.classList.remove('hidden');
+      highlight.style.opacity = '0';
+      highlight.style.transform = 'translateY(10px)';
+    });
+
+    if (onStart) onStart();
+
+    gsap.to(highlights, {
+      opacity: 1,
+      y: 0,
+      duration: duration,
+      ease: ease,
+      stagger: stagger,
+      onComplete: () => {
+        if (onComplete) onComplete();
+        resolve();
+      }
+    });
+  });
+}
+
+/**
+ * Coordinates text transition with score celebration timing
+ * @param {Function} textAnimation - Text animation function to call
+ * @param {Function} scoreAnimation - Score celebration function to call
+ * @param {Object} options - Coordination options
+ */
+export async function integrateWithScoreCelebration(textAnimation, scoreAnimation, options = {}) {
+  const {
+    scoreDelay = 0.3,
+    scoreDuration = 1.5
+  } = options;
+
+  // Start text animation
+  const textPromise = textAnimation();
+  
+  // Schedule score celebration
+  const scorePromise = new Promise((resolve) => {
+    gsap.delayedCall(scoreDelay, () => {
+      scoreAnimation();
+      gsap.delayedCall(scoreDuration, resolve);
+    });
+  });
+
+  // Wait for both to complete
+  await Promise.all([textPromise, scorePromise]);
+}
+
+/**
+ * Creates a complete animation timeline for text transitions
+ * @param {Object} options - Timeline options
+ * @returns {gsap.core.Timeline} GSAP timeline
+ */
+export function createTextTransitionTimeline(options = {}) {
+  const {
+    duration = 1.0,
+    ease = "power2.out",
+    onComplete = null
+  } = options;
+
+  return gsap.timeline({
+    duration: duration,
+    ease: ease,
+    onComplete: onComplete
+  });
 }
