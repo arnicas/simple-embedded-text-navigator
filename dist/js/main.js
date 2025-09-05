@@ -19,7 +19,11 @@ import {
   hideLoading,
   performBucketReorder,
   setGlobalCategoryData,
-  clearTextSelection
+  clearTextSelection,
+  smoothTextTransition,
+  enhancedWordAnimation,
+  buildTextWithWords,
+  integrateWithScoreCelebration
 } from './effects.js';
 
 
@@ -210,9 +214,6 @@ function setRandomStartingQuote() {
   // Process the initial categories and update scores
   if (foundCategories.length > 0) {
     //console.log('Processing initial categories for scoring');
-    incrementCategoryCounts([], foundCategories); // No selected categories, only found
-    updateCategoryCountsDisplay();
-    activateCategoryBuckets([], foundCategories);
     
     // Reorder buckets based on initial scores
     gsap.delayedCall(0.5, () => {
@@ -379,11 +380,9 @@ function getCategory(text) {
   const matches = [];
   const textLower = text.toLowerCase();
   
-  // Search through each category
   for (const [categoryName, phrases] of Object.entries(categories)) {
+    // Step 1: Find all unique phrases that are present in the text.
     const matchedPhrases = [];
-    
-    // Check each phrase in the category (using word boundaries)
     for (const phrase of phrases) {
       const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
       if (regex.test(textLower)) {
@@ -391,49 +390,37 @@ function getCategory(text) {
       }
     }
     
-    // Filter out overlapping phrases (prioritize longer ones)
     if (matchedPhrases.length > 0) {
+      // Step 2: Filter the found phrases to resolve overlaps (e.g., prefer "large stone" over "stone").
       const filteredPhrases = filterOverlappingPhrases(matchedPhrases, textLower);
       
       if (filteredPhrases.length > 0) {
-        // Calculate total score for this category
-        const categoryScore = calculateCategoryScore(filteredPhrases);
+        // Step 3: Count the occurrences of only the filtered, valid phrases.
+        const phraseCounts = {};
+        let totalScoreForCategory = 0;
         
-        matches.push({
-          category: categoryName,
-          phrases: filteredPhrases,
-          score: categoryScore
+        filteredPhrases.forEach(phrase => {
+          const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+          const occurrences = (textLower.match(regex) || []).length;
+          if (occurrences > 0) {
+            phraseCounts[phrase] = occurrences;
+            totalScoreForCategory += occurrences * getPhraseScore(phrase);
+          }
         });
+
+        // Step 4: Add the results for this category to our final list.
+        if (Object.keys(phraseCounts).length > 0) {
+            matches.push({
+              category: categoryName,
+              phrases: phraseCounts, // Return object with phrases and their counts
+              score: totalScoreForCategory // Return the accurately calculated total score
+            });
+        }
       }
     }
   }
   
   return matches;
-}
-
-function calculateCategoryScore(phrases) {
-  let totalScore = 0;
-  
-  phrases.forEach(phrase => {
-    // Split phrase into individual words and sum their scores
-    const words = phrase.toLowerCase().split(/\s+/);
-    words.forEach(word => {
-      // Look up word score, default to 0 if not found
-      let wordScore = word_scores[word] || 0;
-      
-      // Special case for "Yours" category: ensure all words get at least 1 point
-      if (categories.yours && categories.yours.includes(word) && wordScore === 0) {
-        wordScore = 1;
-        // Also update word_scores to persist this
-        word_scores[word] = 1;
-      }
-      
-      totalScore += wordScore;
-    });
-  });
-  
-  console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
-  return totalScore;
 }
 
 function getWordScoreDisplay(phrase) {
@@ -442,6 +429,38 @@ function getWordScoreDisplay(phrase) {
   
   // No automatic base scores - phrases only get points when discovered
   return { display: `${phrase} (${phraseScore} pts)`, totalScore: phraseScore };
+}
+
+function getPhraseScore(phrase) {
+  let score = 0;
+  const words = phrase.toLowerCase().split(/\s+/);
+  words.forEach(word => {
+    // Look up word score, default to 0 if not found
+    let wordScore = word_scores[word] || 0;
+      
+    // Special case for "Yours" category: ensure all user-added words get at least 1 point
+    if (wordScore === 0 && categories.yours && categories.yours.includes(word)) {
+      wordScore = 1;
+    }
+
+    score += wordScore;
+  });
+  return score;
+}
+
+function recalculateAllCategoryScores() {
+  const recalculatedScores = {};
+  for (const category in globalCategoryMatches) {
+    let categoryScore = 0;
+    const matches = globalCategoryMatches[category];
+    if (matches && Object.keys(matches).length > 0) {
+      for (const [phrase, count] of Object.entries(matches)) {
+        categoryScore += count * getPhraseScore(phrase);
+      }
+    }
+    recalculatedScores[category] = categoryScore;
+  }
+  return recalculatedScores;
 }
 
 function createMetadataBuckets() {
@@ -551,9 +570,19 @@ function showCategoryModal(categoryName, imageSrc) {
   modalImage.alt = categoryName;
   modalImage.style.display = 'block'; // Show the image
   
-  // Set title with count and score
+  const matches = globalCategoryMatches[categoryName];
+
+  // Recalculate total score from the ground truth (globalCategoryMatches) to ensure consistency.
+  let totalRecalculatedScore = 0;
+  if (matches && Object.keys(matches).length > 0) {
+      for (const [phrase, count] of Object.entries(matches)) {
+          totalRecalculatedScore += count * getPhraseScore(phrase);
+      }
+  }
+
+  // Set title with count and RECALCULATED score
   const count = globalCategoryCounts[categoryName] || 0;
-  const score = globalCategoryScores[categoryName] || 0;
+  const score = totalRecalculatedScore; // Use the recalculated score for consistency.
   const capitalizedName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
   if (count > 0) {
     modalTitle.textContent = `${capitalizedName}: ${count} Found (${Math.round(score)} Points)`;
@@ -568,10 +597,9 @@ function showCategoryModal(categoryName, imageSrc) {
     modalCount.style.display = 'block';
   }
   
-  // Set matched phrases with individual word scores
-  const matches = globalCategoryMatches[categoryName];
-  if (matches && matches.size > 0) {
-    const matchesArray = Array.from(matches).sort();
+  // Set matched phrases with individual word scores and counts
+  if (matches && Object.keys(matches).length > 0) {
+    const matchesArray = Object.entries(matches).sort(([phraseA], [phraseB]) => phraseA.localeCompare(phraseB));
     
     // Special message for "Yours" category
     const scoringExplanation = categoryName === 'yours' 
@@ -581,9 +609,10 @@ function showCategoryModal(categoryName, imageSrc) {
     modalMatches.innerHTML = `
       ${scoringExplanation}
       <div class="category-matches-list">
-        ${matchesArray.map(phrase => {
-          const scoreInfo = getWordScoreDisplay(phrase);
-          return `<span class="match-phrase">${scoreInfo.display}</span>`;
+        ${matchesArray.map(([phrase, count]) => {
+          const scorePerItem = getPhraseScore(phrase);
+          const display = `${phrase} (${count} &times; ${scorePerItem}pts)`;
+          return `<span class="match-phrase">${display}</span>`;
         }).join('')}
       </div>
     `;
@@ -791,7 +820,7 @@ function cancelYoursChanges() {
 function recalculateYoursCategory() {
   // Initialize global matches for "yours" if it doesn't exist
   if (!globalCategoryMatches.yours) {
-    globalCategoryMatches.yours = new Set();
+    globalCategoryMatches.yours = {};
   }
   
   // Initialize global counts and scores for "yours" if they don't exist
@@ -803,7 +832,7 @@ function recalculateYoursCategory() {
   }
   
   // Clear existing matches - we'll rebuild based on actual discoveries
-  globalCategoryMatches.yours.clear();
+  // globalCategoryMatches.yours.clear();
   
   // Recalculate based on actual discoveries in word_scores
   let totalScore = 0;
@@ -816,7 +845,8 @@ function recalculateYoursCategory() {
     // Only include items that have been actually discovered in text (score > 0)
     // Items added by user but not yet discovered will have score 0 and won't appear
     if (wordScore > 0) {
-      globalCategoryMatches.yours.add(word);
+      // Correctly increment the count for the word in our frequency map (object)
+      globalCategoryMatches.yours[word] = (globalCategoryMatches.yours[word] || 0) + 1;
       totalScore += wordScore;
       totalCount++;
     }
@@ -977,17 +1007,29 @@ function highlightPhrasesInText(text, categories) {
   
   categories.forEach(match => {
     console.log(`Processing category: ${match.category} with phrases:`, match.phrases);
-    match.phrases.forEach(phrase => {
-      const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    // The `phrases` property is now an object of counts, e.g., { "sun": 2 }. We need to iterate over its keys.
+    Object.keys(match.phrases).forEach(phrase => {
+      const escapedWord = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      
+      // This regex uses a word boundary to find the start of the word,
+      // captures the word itself, and then matches any trailing non-alphabetic characters.
+      // This ensures we highlight "sun," or "water." correctly.
+      const regex = new RegExp(`\\b(${escapedWord})[^a-zA-Z]*`, 'gi');
+      
       let regexMatch;
       while ((regexMatch = regex.exec(text)) !== null) {
+        // The full match (e.g., "sun,") is in regexMatch[0].
+        const fullMatch = regexMatch[0];
+        const startPos = regexMatch.index;
+        const endPos = startPos + fullMatch.length;
+        
         potentialMatches.push({
-          start: regexMatch.index,
-          end: regexMatch.index + regexMatch[0].length,
-          phrase: regexMatch[0],
+          start: startPos,
+          end: endPos,
+          phrase: fullMatch, // Highlight the full match, including punctuation
           category: match.category
         });
-        console.log(`Found potential match: "${regexMatch[0]}" at ${regexMatch.index}-${regexMatch.index + regexMatch[0].length} for category ${match.category}`);
+        console.log(`Found potential match: "${fullMatch}" at ${startPos}-${endPos} for category ${match.category}`);
       }
     });
   });
@@ -1011,27 +1053,36 @@ function highlightPhrasesInText(text, categories) {
   
   console.log(`Resolved ${potentialMatches.length} potential matches to ${finalMatches.length} final matches`);
   
-  // Apply highlights in reverse order to maintain text positions
-  let highlightedText = text;
+  // Build the final HTML string properly by working with original positions
+  let highlightedText = '';
+  let lastEnd = 0;
   const highlights = [];
   
-  finalMatches.reverse().forEach((match, index) => {
-    const highlightId = `highlight-${match.category}-${highlights.length}`;
+  // Sort matches in forward order for building
+  finalMatches.sort((a, b) => a.start - b.start);
+  
+  finalMatches.forEach((match, index) => {
+    const highlightId = `highlight-${match.category}-${index}`;
     highlights.push({
       id: highlightId,
       phrase: match.phrase,
       category: match.category
     });
     
-    const before = highlightedText.substring(0, match.start);
-    const after = highlightedText.substring(match.end);
-    const spanHtml = `<span class="phrase-highlight" id="${highlightId}" data-category="${match.category}">${match.phrase}</span>`;
+    // Add text before this match
+    highlightedText += text.substring(lastEnd, match.start);
     
-    highlightedText = before + spanHtml + after;
-    console.log(`Applied highlight: ${highlightId} for phrase: ${match.phrase}`);
+    // Add the highlighted phrase
+    highlightedText += `<span class="phrase-highlight active" id="${highlightId}" data-category="${match.category}">${match.phrase}</span>`;
+    
+    lastEnd = match.end;
   });
   
+  // Add remaining text after last match
+  highlightedText += text.substring(lastEnd);
+  
   console.log(`Total highlights applied: ${highlights.length}`);
+  console.log('Final highlighted text:', highlightedText);
   return { highlightedText, highlights };
 }
 
@@ -1048,7 +1099,8 @@ function initializeGlobalCounts() {
         globalCategoryScores[categoryName] = 0;
       }
       if (!(categoryName in globalCategoryMatches)) {
-        globalCategoryMatches[categoryName] = new Set(); // Use Set to avoid duplicates
+        // Use an object to store phrase counts instead of a Set
+        globalCategoryMatches[categoryName] = {}; 
       }
     });
   }
@@ -1059,31 +1111,28 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   const newCounts = {};
   const newScores = {};
   
-  // Add selected categories counts and scores, track phrases
-  selectedCategories.forEach(match => {
-    newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
-    newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
-    // Add phrases to global matches set
-    if (!globalCategoryMatches[match.category]) {
-      globalCategoryMatches[match.category] = new Set();
-    }
-    match.phrases.forEach(phrase => {
-      globalCategoryMatches[match.category].add(phrase.toLowerCase());
+  const processMatches = (matches) => {
+    matches.forEach(match => {
+      const phraseCounts = match.phrases; // e.g., { "sun": 3, "moon": 1 }
+      const totalItemsInCategory = Object.values(phraseCounts).reduce((sum, count) => sum + count, 0);
+
+      newCounts[match.category] = (newCounts[match.category] || 0) + totalItemsInCategory;
+      newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
+      
+      if (!globalCategoryMatches[match.category]) {
+        globalCategoryMatches[match.category] = {};
+      }
+      
+      // Increment the global frequency map for each phrase
+      for (const [phrase, count] of Object.entries(phraseCounts)) {
+        const p = phrase.toLowerCase();
+        globalCategoryMatches[match.category][p] = (globalCategoryMatches[match.category][p] || 0) + count;
+      }
     });
-  });
-  
-  // Add found categories counts and scores, track phrases
-  foundCategories.forEach(match => {
-    newCounts[match.category] = (newCounts[match.category] || 0) + match.phrases.length;
-    newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
-    // Add phrases to global matches set
-    if (!globalCategoryMatches[match.category]) {
-      globalCategoryMatches[match.category] = new Set();
-    }
-    match.phrases.forEach(phrase => {
-      globalCategoryMatches[match.category].add(phrase.toLowerCase());
-    });
-  });
+  };
+
+  processMatches(selectedCategories);
+  processMatches(foundCategories);
   
   // Add to global counters and scores
   Object.entries(newCounts).forEach(([category, count]) => {
@@ -1104,19 +1153,28 @@ function incrementCategoryCounts(selectedCategories, foundCategories) {
   const totalNewScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
   console.log(`Total score for this selection: ${totalNewScore}`);
   
-  // Store the total score to be celebrated later, don't celebrate immediately
-  // This prevents multiple celebrations if this function is called multiple times
-  window.pendingCategoryScore = (window.pendingCategoryScore || 0) + totalNewScore;
+  // Store the current selection's score to be celebrated later
+  // Don't accumulate - just use the score from this selection
+  window.pendingCategoryScore = totalNewScore;
   
   // Update total display after category scoring is processed
   updateTotalDisplay();
 }
 
 function triggerPendingCategoryCelebration() {
+  // Guard against duplicate celebrations from the same score
+  if (window.lastCelebratedScore === window.pendingCategoryScore) {
+    console.log('Score already celebrated, skipping duplicate celebration');
+    return;
+  }
+  
   // Trigger celebration for accumulated category scores
   if (window.pendingCategoryScore && window.pendingCategoryScore > 1) {
     console.log(`Triggering accumulated category celebration: ${window.pendingCategoryScore}pts`);
     showCategoryScoreCelebration(Math.round(window.pendingCategoryScore));
+    
+    // Track this score as celebrated to prevent duplicates
+    window.lastCelebratedScore = window.pendingCategoryScore;
     window.pendingCategoryScore = 0; // Reset after celebrating
     
     // Update total display after celebration is triggered
@@ -1129,13 +1187,12 @@ function triggerPendingCategoryCelebration() {
 // cleanupTextContent function is now imported from effects.js
 
 function updateCategoryCountsDisplay() {
-  // Update the UI to show both count and score
-  console.log('Updating category display - counts:', globalCategoryCounts, 'scores:', globalCategoryScores);
+  const correctScores = recalculateAllCategoryScores();
+  console.log('Updating category display - counts:', globalCategoryCounts, 'scores:', correctScores);
   Object.keys(globalCategoryCounts).forEach(category => {
     const count = globalCategoryCounts[category] || 0;
-    const score = globalCategoryScores[category] || 0;
+    const score = correctScores[category] || 0;
     const countElement = document.getElementById(`count-${category}`);
-   // console.log(`Updating ${category}: count=${count}, score=${score}, element exists=${!!countElement}`);
     if (countElement) {
       if (count > 0 || score > 0) {
         const displayText = `${Math.round(score)} (${count})`;
@@ -1197,8 +1254,9 @@ function updateYoursScoreDisplay() {
 }
 
 function updateTotalDisplay() {
+  const correctScores = recalculateAllCategoryScores();
   // Calculate total category points
-  const categoryPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
+  const categoryPoints = Object.values(correctScores).reduce((sum, score) => sum + score, 0);
   
   // Calculate total metadata points
   const metadataPoints = (globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR) +
@@ -1266,7 +1324,7 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
   selectedCategories.forEach(match => {
     const bucket = document.getElementById(`bucket-${match.category}`);
     if (bucket) {
-      bucket.title = `Selected: ${match.phrases.join(', ')}`;
+      bucket.title = `Selected: ${Object.keys(match.phrases).join(', ')}`;
     }
   });
   
@@ -1275,11 +1333,12 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
     const bucket = document.getElementById(`bucket-${match.category}`);
     if (bucket) {
       // Add to existing tooltip or create new one
+      const phraseString = Object.keys(match.phrases).join(', ');
       const existingTitle = bucket.title;
       if (existingTitle) {
-        bucket.title = `${existingTitle} | Found: ${match.phrases.join(', ')}`;
+        bucket.title = `${existingTitle} | Found: ${phraseString}`;
       } else {
-        bucket.title = `Found: ${match.phrases.join(', ')}`;
+        bucket.title = `Found: ${phraseString}`;
       }
     }
   });
@@ -1300,15 +1359,7 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
     // Process scoring and celebrations immediately based on found categories
     if (foundCategories.length > 0) {
       gsap.delayedCall(2.5, () => {  // Wait for text animation to mostly complete
-        console.log('Processing category scoring for:', foundCategories);
-        
-        // Increment counters and trigger score celebrations
-        incrementCategoryCounts(selectedCategories, foundCategories);
-        updateCategoryCountsDisplay();
-        activateCategoryBuckets(selectedCategories, foundCategories);
-        
-        // Trigger any accumulated category score celebration
-        triggerPendingCategoryCelebration();
+        //console.log('Processing category scoring for:', foundCategories);
         
         // Process any pending metadata celebrations after word celebrations complete
         calculateAndCelebrateMetadataScore();
@@ -1376,32 +1427,27 @@ function updateCategoryBuckets(selectedCategories, foundCategories) {
         gsap.delayedCall(0.3, () => {
           console.log('Starting phrase animation');
           animatePhrasesToBuckets(highlights, () => {
-            // NOW increment counters and trigger score celebrations after animations complete
-            console.log('Animation complete, incrementing counters and updating display');
-            incrementCategoryCounts(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
-            updateCategoryCountsDisplay();
+            // This callback now only handles things that MUST happen after the animation.
+            console.log('Animation complete, activating buckets and cleaning up');
             activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
-            
-            // Trigger any accumulated category score celebration
-            triggerPendingCategoryCelebration();
-            
-            // Process any pending metadata celebrations after word celebrations complete
-            calculateAndCelebrateMetadataScore();
-            
-            // Clean up any remaining HTML markup
             cleanupTextContent();
-            
-            // Reorder buckets based on updated counts after a short delay
-            gsap.delayedCall(0.5, () => {
-              reorderCategoryBuckets();
-            });
           }); // animatePhrasesToBuckets callback
         }); // gsap.delayedCall callback
       } else {
-        // No highlights found, ensure text is visible
-        console.log('No highlights found, text remains visible without changes');
+        // No highlights found, but we still need to run post-animation logic
+        console.log('No highlights found to animate, but running cleanup and celebrations.');
+        // Fallback to ensure text is visible and celebrations happen
+        cleanupTextContent();
+        activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
       }
     });
+
+    // Score celebrations should be triggered regardless of whether the animation runs.
+    gsap.delayedCall(2.5, () => {
+      triggerPendingCategoryCelebration();
+      calculateAndCelebrateMetadataScore();
+    });
+
   } 
   
   // Ensure buckets are properly reset if no matches at all
@@ -1430,110 +1476,233 @@ function animateTextChange(element, selectedText, newText) {
   resetHighlight(element, selectedText);
 
   const score = currentResult['similarity'];
-  console.log('similarity score', score, currentResult);
 
-  // First fade out the current text
-    gsap.to(element, {
-    opacity: 0,
-    duration: 0.3,
-    ease: "power2.out",
-    onComplete: () => {
-      // Create word spans for animation first
-      const words = newText.split(' ');
-      element.innerHTML = '';
-      
-      words.forEach((word, index) => {
-        const span = document.createElement('span');
-        span.textContent = word;
-        span.className = 'word';
-        span.style.display = 'inline-block';
-        span.style.opacity = '0';
-        span.style.transform = `translateY(${randomY(-30, 30)}px)`;
-        element.appendChild(span);
-        
-        // Add space after each word except the last one
-        if (index < words.length - 1) {
-          element.appendChild(document.createTextNode(' '));
-        }
-      });
-      
-      // Apply highlights to individual word spans instead of replacing all HTML
-      const foundCategories = currentResult.foundCategories || [];
-      if (foundCategories.length > 0) {
-        // Check each word span to see if it should be highlighted
-        const wordSpans = element.querySelectorAll('.word');
-        foundCategories.forEach(match => {
-          match.phrases.forEach(phrase => {
-            const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-            
-            // For multi-word phrases, we need to find consecutive word spans
-            const words = phrase.split(' ');
-            if (words.length === 1) {
-              // Single word - find matching span
-              wordSpans.forEach((span, index) => {
-                if (regex.test(span.textContent)) {
-                  span.classList.add('phrase-highlight');
-                  span.id = `highlight-${match.category}-${index}`;
-                  span.setAttribute('data-category', match.category);
-                }
-              });
-            } else {
-              // Multi-word phrase - find consecutive matching spans
-              for (let i = 0; i <= wordSpans.length - words.length; i++) {
-                let matches = true;
-                for (let j = 0; j < words.length; j++) {
-                  const wordRegex = new RegExp(`\\b${words[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-                  if (!wordRegex.test(wordSpans[i + j].textContent)) {
-                    matches = false;
-                    break;
-                  }
-                }
-                if (matches) {
-                  // Apply highlight to all words in the phrase, use same base ID
-                  const baseId = `highlight-${match.category}-${i}`;
-                  for (let j = 0; j < words.length; j++) {
-                    wordSpans[i + j].classList.add('phrase-highlight');
-                    wordSpans[i + j].id = j === 0 ? baseId : `${baseId}-${j}`;
-                    wordSpans[i + j].setAttribute('data-category', match.category);
-                    wordSpans[i + j].setAttribute('data-phrase-group', baseId);
-                  }
-                  break; // Only highlight the first occurrence
-                }
-              }
-            }
-          });
-        });
-      }
-
-      // Fade the container back in
-      gsap.to(element, {
-        opacity: 1,
-        duration: 0.2,
+  //console.log('similarity score', score, currentResult);
+  
+  // For now, use a simple, reliable text change to ensure proper rendering
+  // We'll add the smooth animations back once the basic functionality works
+  
+  if (score > 0.8) {
+    console.log('high score - using simple text change for now');
+    
+    // For high scores, we still want to preserve word spans for highlighting
+    // Use buildTextWithWords instead of formattedContent to maintain structure
+    const wordContent = buildTextWithWords(newText);
+    element.innerHTML = wordContent;
+    
+    // Apply highlights after text change
+    applyHighlightsToText(element, newText);
+    
+    // No score celebration for similarity scores - only for category discoveries
+    
+  } else {
+    //console.log('low score - using enhanced word animation');
+    
+    try {
+      // Use enhanced word animation for low scores
+      enhancedWordAnimation(element, selectedText, newText, {
+        duration: 0.5, // Reduced from 1.0 to 0.5 seconds
+        stagger: 0.05, // Reduced from 0.1 to 0.05 seconds
+        ease: "power4.out",
+        onStart: () => {
+          console.log('Starting enhanced word animation');
+        },
         onComplete: () => {
-          // Animate each word into place
-          gsap.to('.word', {
-            opacity: 1,
-            y: 0,
-            duration: 0.8,
-            ease: 'back.out(1.7)',
-            stagger: {
-              amount: 0.6,
-              from: 'random'
-            },
-            onComplete: () => {
-              // Replace with formatted content after animation
-              // Check if text contains HTML markup (highlights) - if so, don't sanitize
-              if (newText.includes('<span class="phrase-highlight"')) {
-                element.innerHTML = newText;
-              } else {
-                element.innerHTML = formattedContent(newText);
-              }
-            }
+          console.log('Enhanced word animation completed');
+          
+          // Add a small delay to ensure animation is completely finished
+          // This prevents race conditions with highlighting
+          gsap.delayedCall(0.05, () => {
+            console.log('Starting highlights after animation completion delay');
+            // Apply highlights after animation completes
+            applyHighlightsToText(element, newText);
+            // No score celebration for similarity scores - only for category discoveries
           });
         }
+      }).catch(error => {
+        console.error('Enhanced word animation failed, using fallback:', error);
+        // Fallback: use word structure instead of plain text
+        const wordContent = buildTextWithWords(newText);
+        element.innerHTML = wordContent;
+        // Apply highlights after fallback
+        applyHighlightsToText(element, newText);
       });
+    } catch (error) {
+      console.error('Enhanced word animation error, using fallback:', error);
+      // Fallback: use word structure instead of plain text
+      const wordContent = buildTextWithWords(newText);
+      element.innerHTML = wordContent;
+      // Apply highlights after fallback
+      applyHighlightsToText(element, newText);
+    }
+  }
+}
+/* 
+// Helper function to clean text and prepare for highlighting
+function cleanTextForHighlights(element) {
+  // Remove any existing highlights to start fresh
+  const existingHighlights = element.querySelectorAll('.phrase-highlight');
+  if (existingHighlights.length > 0) {
+    console.log(`Cleaning up ${existingHighlights.length} existing phrase-highlight spans`);
+    existingHighlights.forEach(highlight => {
+      const textContent = highlight.textContent;
+      highlight.replaceWith(document.createTextNode(textContent));
+    });
+  }
+  
+  // DON'T remove word spans - we need them for highlighting!
+  // The word spans are created by the animation system and should be preserved
+  const wordSpans = element.querySelectorAll('.word');
+  if (wordSpans.length > 0) {
+    console.log(`Preserving ${wordSpans.length} word spans from animation system`);
+  } else {
+    console.log('No word spans found - text may not have been animated yet');
+  }
+  
+  // Normalize whitespace and ensure clean text
+  element.normalize();
+}
+  */
+
+// Helper function to apply highlights to text
+function applyHighlightsToText(element, text) {
+  // Guard against multiple calls - if highlights are already being processed, skip
+  if (element.dataset.highlightsProcessing === 'true') {
+    console.log('Highlights already being processed, skipping duplicate call');
+    return;
+  }
+  
+  // Check if we have found categories to highlight
+  if (currentResult && currentResult.foundCategories && currentResult.foundCategories.length > 0) {
+    console.log('Applying highlights with new, robust method for categories:', currentResult.foundCategories);
+    
+    // Mark that we're processing highlights
+    element.dataset.highlightsProcessing = 'true';
+    
+    // The animation system may have already split text into word/char spans.
+    // For robust highlighting, we work on a clean HTML string first, then set it.
+    const originalText = element.textContent || element.innerText;
+    
+    const { highlightedText, highlights } = highlightPhrasesInText(originalText, currentResult.foundCategories);
+    
+    // Replace the element's content with the newly highlighted HTML.
+    // This is much more reliable than trying to manipulate the live DOM tree.
+    element.innerHTML = highlightedText;
+
+    console.log('Highlights applied to text using pre-built HTML.');
+    
+    // Schedule the highlights to fade to background-only after a delay
+    gsap.delayedCall(2.0, () => {
+      fadeHighlightsToBackground();
+      // Clear the processing flag after fade completes
+      element.dataset.highlightsProcessing = 'false';
+    });
+    
+  } else {
+    console.log('No found categories to highlight');
+    // Clear the processing flag if no highlights
+    element.dataset.highlightsProcessing = 'false';
+  }
+}
+
+/* // Helper function to highlight a single word
+function highlightSingleWord(element, phrase, category) {
+  const wordSpans = element.querySelectorAll('.word');
+  
+  wordSpans.forEach(wordSpan => {
+    const wordText = wordSpan.textContent;
+    
+    // Check if this word matches the phrase (case insensitive)
+    if (wordText.toLowerCase() === phrase.toLowerCase()) {
+      console.log(`Found matching single word: "${wordText}" for phrase: "${phrase}"`);
+      
+      // Create highlight span and wrap the word span
+      const highlightId = `highlight-${category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const highlightSpan = document.createElement('span');
+      highlightSpan.className = 'phrase-highlight active';
+      highlightSpan.setAttribute('data-category', category);
+      highlightSpan.setAttribute('data-id', highlightId);
+      
+      // Move the word span inside the highlight span
+      wordSpan.parentNode.insertBefore(highlightSpan, wordSpan);
+      highlightSpan.appendChild(wordSpan);
+      
+      console.log(`Wrapped single word "${wordText}" with highlight span`);
     }
   });
+} */
+
+/* // Helper function to highlight a multi-word phrase
+function highlightMultiWordPhrase(element, phraseWords, category) {
+  const wordSpans = Array.from(element.querySelectorAll('.word'));
+  
+  // Look for consecutive word spans that match the phrase
+  for (let i = 0; i <= wordSpans.length - phraseWords.length; i++) {
+    // Check if the next N words match our phrase
+    let matches = true;
+    for (let j = 0; j < phraseWords.length; j++) {
+      const wordText = wordSpans[i + j].textContent;
+      if (wordText.toLowerCase() !== phraseWords[j].toLowerCase()) {
+        matches = false;
+        break;
+      }
+    }
+    
+    if (matches) {
+      console.log(`Found matching multi-word phrase starting at word ${i}:`, phraseWords);
+      
+      // Create highlight span for the entire phrase
+      const highlightId = `highlight-${category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const highlightSpan = document.createElement('span');
+      highlightSpan.className = 'phrase-highlight active';
+      highlightSpan.setAttribute('data-category', category);
+      highlightSpan.setAttribute('data-id', highlightId);
+      
+      // Insert the highlight span before the first word
+      const firstWord = wordSpans[i];
+      firstWord.parentNode.insertBefore(highlightSpan, firstWord);
+      
+      // Move all matching words inside the highlight span, preserving spaces
+      for (let j = 0; j < phraseWords.length; j++) {
+        const wordSpan = wordSpans[i + j];
+        
+        // If this isn't the first word, add a space before it
+        if (j > 0) {
+          const spaceNode = document.createTextNode(' ');
+          highlightSpan.appendChild(spaceNode);
+        }
+        
+        highlightSpan.appendChild(wordSpan);
+      }
+      
+      console.log(`Wrapped multi-word phrase "${phraseWords.join(' ')}" with highlight span and preserved spacing`);
+      
+      // Skip ahead since we've processed these words
+      i += phraseWords.length - 1;
+    }
+  }
+} */
+
+// Function to fade highlights to background-only styling (no layout shift)
+function fadeHighlightsToBackground() {
+  const activeHighlights = document.querySelectorAll('.phrase-highlight.active');
+  
+  console.log(`Found ${activeHighlights.length} active highlights to fade`);
+  
+  if (activeHighlights.length > 0) {
+    console.log(`Fading ${activeHighlights.length} highlights to subtle background`);
+    
+    // Simple approach: change the class and let CSS handle the transition
+    // This avoids conflicts between GSAP and CSS
+    activeHighlights.forEach(highlight => {
+      highlight.classList.remove('active');
+      highlight.classList.add('faded');
+    });
+    
+    console.log('Highlights faded to subtle background - using CSS transitions');
+  } else {
+    console.log('No active highlights found to fade');
+  }
 }
 
 
@@ -1589,7 +1758,7 @@ function trackMetadata(relatedItemObject) {
     if (!isInitialLoad) {
       pendingMetadataDiscoveries.newAuthor = relatedItemObject.author;
       pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_AUTHOR;
-      console.log(`NEW AUTHOR DISCOVERED: ${relatedItemObject.author} (scoring deferred)`);
+     // console.log(`NEW AUTHOR DISCOVERED: ${relatedItemObject.author} (scoring deferred)`);
     }
   }
   
@@ -1602,7 +1771,7 @@ function trackMetadata(relatedItemObject) {
     if (!isInitialLoad) {
       pendingMetadataDiscoveries.newBook = relatedItemObject.title;
       pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_BOOK;
-      console.log(`NEW BOOK DISCOVERED: ${relatedItemObject.title} (scoring deferred)`);
+     // console.log(`NEW BOOK DISCOVERED: ${relatedItemObject.title} (scoring deferred)`);
     }
   }
   
@@ -1615,7 +1784,7 @@ function trackMetadata(relatedItemObject) {
     if (!isInitialLoad) {
       pendingMetadataDiscoveries.newStory = relatedItemObject.story_title;
       pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_STORY;
-      console.log(`NEW STORY DISCOVERED: ${relatedItemObject.story_title} (scoring deferred)`);
+     // console.log(`NEW STORY DISCOVERED: ${relatedItemObject.story_title} (scoring deferred)`);
     }
   }
   
@@ -1676,7 +1845,7 @@ async function processSelection(textElement, selectedText, range) {
     return;
   }
 
-  console.log('Valid selection, creating highlight...');
+ // console.log('Valid selection, creating highlight...');
 
   // Create highlight span
   const span = document.createElement('span');
@@ -1719,6 +1888,14 @@ async function processSelection(textElement, selectedText, range) {
     console.log('Found related item with score:', relatedItemObject ? relatedItemObject.score : 'none');
 
     if (relatedItemObject) {
+      // 1. DATA: Update scores and counts immediately and reliably.
+      incrementCategoryCounts(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
+      
+      // 2. UI DATA: Update the bucket displays with new scores and reorder them.
+      updateCategoryCountsDisplay();
+      reorderCategoryBuckets();
+
+      // 3. VISUALS: Animate text change, update info panel, and trigger bucket animations.
       animateTextChange(textElement, selectedText, relatedItemObject.text, currentResult);
       replaceRelatedInfo(relatedItemObject);
       updateCategoryBuckets(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
@@ -1880,7 +2057,15 @@ try {
     }
 
     // Check if we're in the middle of a text animation
-    if (document.querySelector('.word')) {
+    // Look for active GSAP animations rather than just word spans
+    // Word spans are now permanent parts of the highlighting system
+    const activeAnimations = gsap.globalTimeline.getChildren().filter(tween => 
+      tween.isActive() && 
+      (tween.targets().some(target => target === textElement) || 
+       tween.targets().some(target => target.classList && target.classList.contains('word')))
+    );
+    
+    if (activeAnimations.length > 0) {
       console.log('Text animation in progress, skipping selection...');
       return;
     }
