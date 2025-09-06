@@ -1538,32 +1538,6 @@ function animateTextChange(element, selectedText, newText) {
     }
   }
 }
-/* 
-// Helper function to clean text and prepare for highlighting
-function cleanTextForHighlights(element) {
-  // Remove any existing highlights to start fresh
-  const existingHighlights = element.querySelectorAll('.phrase-highlight');
-  if (existingHighlights.length > 0) {
-    console.log(`Cleaning up ${existingHighlights.length} existing phrase-highlight spans`);
-    existingHighlights.forEach(highlight => {
-      const textContent = highlight.textContent;
-      highlight.replaceWith(document.createTextNode(textContent));
-    });
-  }
-  
-  // DON'T remove word spans - we need them for highlighting!
-  // The word spans are created by the animation system and should be preserved
-  const wordSpans = element.querySelectorAll('.word');
-  if (wordSpans.length > 0) {
-    console.log(`Preserving ${wordSpans.length} word spans from animation system`);
-  } else {
-    console.log('No word spans found - text may not have been animated yet');
-  }
-  
-  // Normalize whitespace and ensure clean text
-  element.normalize();
-}
-  */
 
 // Helper function to apply highlights to text
 function applyHighlightsToText(element, text) {
@@ -1606,83 +1580,6 @@ function applyHighlightsToText(element, text) {
   }
 }
 
-/* // Helper function to highlight a single word
-function highlightSingleWord(element, phrase, category) {
-  const wordSpans = element.querySelectorAll('.word');
-  
-  wordSpans.forEach(wordSpan => {
-    const wordText = wordSpan.textContent;
-    
-    // Check if this word matches the phrase (case insensitive)
-    if (wordText.toLowerCase() === phrase.toLowerCase()) {
-      console.log(`Found matching single word: "${wordText}" for phrase: "${phrase}"`);
-      
-      // Create highlight span and wrap the word span
-      const highlightId = `highlight-${category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const highlightSpan = document.createElement('span');
-      highlightSpan.className = 'phrase-highlight active';
-      highlightSpan.setAttribute('data-category', category);
-      highlightSpan.setAttribute('data-id', highlightId);
-      
-      // Move the word span inside the highlight span
-      wordSpan.parentNode.insertBefore(highlightSpan, wordSpan);
-      highlightSpan.appendChild(wordSpan);
-      
-      console.log(`Wrapped single word "${wordText}" with highlight span`);
-    }
-  });
-} */
-
-/* // Helper function to highlight a multi-word phrase
-function highlightMultiWordPhrase(element, phraseWords, category) {
-  const wordSpans = Array.from(element.querySelectorAll('.word'));
-  
-  // Look for consecutive word spans that match the phrase
-  for (let i = 0; i <= wordSpans.length - phraseWords.length; i++) {
-    // Check if the next N words match our phrase
-    let matches = true;
-    for (let j = 0; j < phraseWords.length; j++) {
-      const wordText = wordSpans[i + j].textContent;
-      if (wordText.toLowerCase() !== phraseWords[j].toLowerCase()) {
-        matches = false;
-        break;
-      }
-    }
-    
-    if (matches) {
-      console.log(`Found matching multi-word phrase starting at word ${i}:`, phraseWords);
-      
-      // Create highlight span for the entire phrase
-      const highlightId = `highlight-${category}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const highlightSpan = document.createElement('span');
-      highlightSpan.className = 'phrase-highlight active';
-      highlightSpan.setAttribute('data-category', category);
-      highlightSpan.setAttribute('data-id', highlightId);
-      
-      // Insert the highlight span before the first word
-      const firstWord = wordSpans[i];
-      firstWord.parentNode.insertBefore(highlightSpan, firstWord);
-      
-      // Move all matching words inside the highlight span, preserving spaces
-      for (let j = 0; j < phraseWords.length; j++) {
-        const wordSpan = wordSpans[i + j];
-        
-        // If this isn't the first word, add a space before it
-        if (j > 0) {
-          const spaceNode = document.createTextNode(' ');
-          highlightSpan.appendChild(spaceNode);
-        }
-        
-        highlightSpan.appendChild(wordSpan);
-      }
-      
-      console.log(`Wrapped multi-word phrase "${phraseWords.join(' ')}" with highlight span and preserved spacing`);
-      
-      // Skip ahead since we've processed these words
-      i += phraseWords.length - 1;
-    }
-  }
-} */
 
 // Function to fade highlights to background-only styling (no layout shift)
 function fadeHighlightsToBackground() {
@@ -2217,26 +2114,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-function calculateScore(phrases) {
-  let totalScore = 0;
-  
-  phrases.forEach(phrase => {
-    // Only score phrases that have actually been discovered (have a score > 0)
-    let phraseScore = word_scores[phrase] || 0;
-    
-    // No automatic base scores - phrases only get points when discovered
-    totalScore += phraseScore;
-  });
-  
-  console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
-  return totalScore;
-}
-
-let categoryData = [];
-let currentIndex = -1; // -1 indicates the passage is not in the index
-let animationTimeout;
-
-async function fetchWithCache(url) {
-    const cacheName = 'fairytale-cache';
-    // ... existing code ...
-}
