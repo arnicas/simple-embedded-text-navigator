@@ -1,8 +1,8 @@
 
-## Simple Embedded Text Navigator (for Fairy Tales)
+# Simple Embedded Text Navigator (for Fairy Tales)
 
 
-# Overview
+## Overview
 
 This is now an overloaded fairy tale hunter app with scoring etc. Mea culpa. The key elements are these:
 
@@ -95,7 +95,7 @@ You can edit the file in static/site-data/category-words.json.  Then run the pyt
 
 During play, you can also add words or phrases to the Yours category. They will all be default 1 point, though.
 
-## Deployment on Pages If You Want
+## Deployment on GH Pages If You Want
 
 It's only a browser app, so you can just run index with the dist folder.  For doing this as a github page, you need a .github/worflows/static.yaml file with the instruction to copy dist (along with other things):
 
@@ -130,6 +130,8 @@ I used [this codepen from Chris Smith](https://codepen.io/BlogFire/pen/LYoRWLe)t
 I used a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> to make the medieval-cartoon style icons.
 
 The UI code was done with extensive AI help from mostly Claude and Gemini Pro 2.5. So it's a mess and needs some cleanup (working on it).  This was a bit of a process. They still have a ways to go with understanding DOM animation and CSS, imo.
+
+The fairy tales came from [Project Gutenberg](https://www.gutenberg.org/).
 
 
 ## License

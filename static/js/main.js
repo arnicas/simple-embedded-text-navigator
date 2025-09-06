@@ -23,7 +23,8 @@ import {
   smoothTextTransition,
   enhancedWordAnimation,
   buildTextWithWords,
-  integrateWithScoreCelebration
+  integrateWithScoreCelebration,
+  initializeCategoryImages
 } from './effects.js';
 
 
@@ -1950,260 +1951,270 @@ async function initialize() {
 // main loop
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // First, fetch and prepare the icons for the loader
+    const iconsReady = await initializeCategoryImages();
 
-try {
-  // Create the index when the page loads
-  await initialize();
-  const textElement = document.getElementById('text');
-  
-  // Help modal functionality
-  const helpButton = document.getElementById('helpButton');
-  const helpModal = document.getElementById('helpModal');
-  const closeButton = helpModal.querySelector('.close');
-  
-  // Show help modal
-  helpButton.addEventListener('click', () => {
-    helpModal.classList.remove('hidden');
-  });
-  
-  // Hide help modal when clicking close button
-  closeButton.addEventListener('click', () => {
-    helpModal.classList.add('hidden');
-  });
-  
-  // Hide help modal when clicking outside the modal content
-  helpModal.addEventListener('click', (e) => {
-    if (e.target === helpModal) {
-      helpModal.classList.add('hidden');
+    // Now, show the loading indicator with the icons
+    if (iconsReady) {
+        showLoading('Loading assets...');
+    } else {
+        showLoading('Loading...'); // Fallback if icons fail
     }
-  });
-
-  // Category modal functionality
-  const categoryModal = document.getElementById('categoryModal');
-  const categoryCloseButton = document.getElementById('categoryModalClose');
-  
-  // Hide category modal when clicking close button
-  categoryCloseButton.addEventListener('click', () => {
-    hideCategoryModal();
-  });
-  
-  // Hide category modal when clicking outside the modal content
-  categoryModal.addEventListener('click', (e) => {
-    if (e.target === categoryModal) {
-      hideCategoryModal();
-    }
-  });
-
-  // ===== YOURS EDIT MODAL EVENT LISTENERS =====
-
-  // Yours edit modal elements
-  const yoursEditModal = document.getElementById('yoursEditModal');
-  const yoursEditModalClose = document.getElementById('yoursEditModalClose');
-  const yoursAddWord = document.getElementById('yoursAddWord');
-  const yoursNewWord = document.getElementById('yoursNewWord');
-  const yoursSaveButton = document.getElementById('yoursSaveButton');
-  const yoursCancelButton = document.getElementById('yoursCancelButton');
-
-  // Close modal when clicking X
-  yoursEditModalClose.addEventListener('click', hideYoursEditModal);
-
-  // Close modal when clicking outside
-  yoursEditModal.addEventListener('click', (e) => {
-    if (e.target === yoursEditModal) {
-      hideYoursEditModal();
-    }
-  });
-
-  // Add word button
-  yoursAddWord.addEventListener('click', addYoursWord);
-
-  // Add word on Enter key
-  yoursNewWord.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-      addYoursWord();
-    }
-  });
-
-  // Save button
-  yoursSaveButton.addEventListener('click', saveYoursChanges);
-
-  // Cancel button
-  yoursCancelButton.addEventListener('click', cancelYoursChanges);
-
-  // Hide modals with Escape key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (!helpModal.classList.contains('hidden')) {
-        helpModal.classList.add('hidden');
-      }
-      if (!categoryModal.classList.contains('hidden')) {
-        hideCategoryModal();
-      }
-      if (!yoursEditModal.classList.contains('hidden')) {
-        hideYoursEditModal();
-      }
-    }
-  });
-
-  // Simplified selection handler - only use mouseup for reliability
-  let isProcessingSelection = false;
-  let lastProcessedSelection = '';
-
-  async function handleSelection() {
-    // Prevent processing if already busy
-    if (isProcessingSelection) {
-      console.log('Already processing selection, skipping...');
-      return;
-    }
-
-    // Check if we're in the middle of a text animation
-    // Look for active GSAP animations rather than just word spans
-    // Word spans are now permanent parts of the highlighting system
-    const activeAnimations = gsap.globalTimeline.getChildren().filter(tween => 
-      tween.isActive() && 
-      (tween.targets().some(target => target === textElement) || 
-       tween.targets().some(target => target.classList && target.classList.contains('word')))
-    );
-    
-    if (activeAnimations.length > 0) {
-      console.log('Text animation in progress, skipping selection...');
-      return;
-    }
-
-    // Get the current selection
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
-
-    // Basic validation
-    if (selectedText.length < 4) {
-      return; // Too short
-    }
-
-    // Check for duplicate
-    if (selectedText === lastProcessedSelection) {
-      console.log('Duplicate selection, skipping...');
-      return;
-    }
-
-    console.log('Processing selection:', selectedText.substring(0, 30) + '...');
-
-    // Set processing flag
-    isProcessingSelection = true;
-    lastProcessedSelection = selectedText;
 
     try {
-      // Capture the range BEFORE clearing the selection
-      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        // Create the index when the page loads
+        await initialize();
 
-      // Clear the selection after a longer delay to allow users to see their selection
-      setTimeout(() => {
-        clearTextSelection();
-      }, 300); // Increased delay to give users time to see their selection
+        const textElement = document.getElementById('text');
 
-      // Process the selection with the captured range
-      await processSelection(textElement, selectedText, range);
+        // Help modal functionality
+        const helpButton = document.getElementById('helpButton');
+        const helpModal = document.getElementById('helpModal');
+        const closeButton = helpModal.querySelector('.close');
+
+        // Show help modal
+        helpButton.addEventListener('click', () => {
+            helpModal.classList.remove('hidden');
+        });
+
+        // Hide help modal when clicking close button
+        closeButton.addEventListener('click', () => {
+            helpModal.classList.add('hidden');
+        });
+
+        // Hide help modal when clicking outside the modal content
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                helpModal.classList.add('hidden');
+            }
+        });
+
+        // Category modal functionality
+        const categoryModal = document.getElementById('categoryModal');
+        const categoryCloseButton = document.getElementById('categoryModalClose');
+
+        // Hide category modal when clicking close button
+        categoryCloseButton.addEventListener('click', () => {
+            hideCategoryModal();
+        });
+
+        // Hide category modal when clicking outside the modal content
+        categoryModal.addEventListener('click', (e) => {
+            if (e.target === categoryModal) {
+                hideCategoryModal();
+            }
+        });
+
+        // ===== YOURS EDIT MODAL EVENT LISTENERS =====
+
+        // Yours edit modal elements
+        const yoursEditModal = document.getElementById('yoursEditModal');
+        const yoursEditModalClose = document.getElementById('yoursEditModalClose');
+        const yoursAddWord = document.getElementById('yoursAddWord');
+        const yoursNewWord = document.getElementById('yoursNewWord');
+        const yoursSaveButton = document.getElementById('yoursSaveButton');
+        const yoursCancelButton = document.getElementById('yoursCancelButton');
+
+        // Close modal when clicking X
+        yoursEditModalClose.addEventListener('click', hideYoursEditModal);
+
+        // Close modal when clicking outside
+        yoursEditModal.addEventListener('click', (e) => {
+            if (e.target === yoursEditModal) {
+                hideYoursEditModal();
+            }
+        });
+
+        // Add word button
+        yoursAddWord.addEventListener('click', addYoursWord);
+
+        // Add word on Enter key
+        yoursNewWord.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addYoursWord();
+            }
+        });
+
+        // Save button
+        yoursSaveButton.addEventListener('click', saveYoursChanges);
+
+        // Cancel button
+        yoursCancelButton.addEventListener('click', cancelYoursChanges);
+
+        // Hide modals with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (!helpModal.classList.contains('hidden')) {
+                    helpModal.classList.add('hidden');
+                }
+                if (!categoryModal.classList.contains('hidden')) {
+                    hideCategoryModal();
+                }
+                if (!yoursEditModal.classList.contains('hidden')) {
+                    hideYoursEditModal();
+                }
+            }
+        });
+
+        // Simplified selection handler - only use mouseup for reliability
+        let isProcessingSelection = false;
+        let lastProcessedSelection = '';
+
+        async function handleSelection() {
+            // Prevent processing if already busy
+            if (isProcessingSelection) {
+                console.log('Already processing selection, skipping...');
+                return;
+            }
+
+            // Check if we're in the middle of a text animation
+            // Look for active GSAP animations rather than just word spans
+            // Word spans are now permanent parts of the highlighting system
+            const activeAnimations = gsap.globalTimeline.getChildren().filter(tween =>
+                tween.isActive() &&
+                (tween.targets().some(target => target === textElement) ||
+                    tween.targets().some(target => target.classList && target.classList.contains('word')))
+            );
+
+            if (activeAnimations.length > 0) {
+                console.log('Text animation in progress, skipping selection...');
+                return;
+            }
+
+            // Get the current selection
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+
+            // Basic validation
+            if (selectedText.length < 4) {
+                return; // Too short
+            }
+
+            // Check for duplicate
+            if (selectedText === lastProcessedSelection) {
+                console.log('Duplicate selection, skipping...');
+                return;
+            }
+
+            console.log('Processing selection:', selectedText.substring(0, 30) + '...');
+
+            // Set processing flag
+            isProcessingSelection = true;
+            lastProcessedSelection = selectedText;
+
+            try {
+                // Capture the range BEFORE clearing the selection
+                const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+                // Clear the selection after a longer delay to allow users to see their selection
+                setTimeout(() => {
+                    clearTextSelection();
+                }, 300); // Increased delay to give users time to see their selection
+
+                // Process the selection with the captured range
+                await processSelection(textElement, selectedText, range);
+
+            } catch (error) {
+                console.error('Error processing selection:', error);
+                // Show error message to user
+                const messageElement = document.getElementById('message');
+                if (messageElement) {
+                    messageElement.textContent = "An error occurred. Please try again.";
+                    messageElement.style.display = 'flex';
+                    gsap.to(messageElement, {
+                        duration: 4,
+                        opacity: 1,
+                        onComplete: () => {
+                            messageElement.textContent = "";
+                            messageElement.style.display = 'none';
+                        }
+                    });
+                }
+            } finally {
+                // Always reset the processing flag
+                isProcessingSelection = false;
+                console.log('Selection processing unlocked');
+            }
+        }
+
+        // Cross-platform selection handling
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                (window.innerWidth <= 768 && window.innerHeight <= 1024);
+        }
+
+        if (isMobile()) {
+            // Mobile: Use touch events
+            console.log('Using mobile selection handling');
+
+            textElement.addEventListener('touchend', () => {
+                // Delay to allow touch selection menu to appear/disappear
+                setTimeout(async () => {
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+
+                    if (selectedText.length >= 4) {
+                        console.log('Mobile touch selection detected:', selectedText.substring(0, 30) + '...');
+                        await handleSelection();
+                    }
+                }, 400); // Increased delay for mobile touch selection
+            });
+
+            // Also listen for selection changes on mobile
+            let mobileSelectionTimeout = null;
+
+            document.addEventListener('selectionchange', () => {
+                // Clear any pending timeout
+                if (mobileSelectionTimeout) {
+                    clearTimeout(mobileSelectionTimeout);
+                }
+
+                // Set a new timeout to process the selection
+                mobileSelectionTimeout = setTimeout(async () => {
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+
+                    if (selectedText.length >= 4 && !isProcessingSelection) {
+                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                        if (range && textElement.contains(range.commonAncestorContainer)) {
+                            console.log('Mobile selection change detected:', selectedText.substring(0, 30) + '...');
+                            await handleSelection();
+                        }
+                    }
+                }, 400); // Increased delay for mobile selection
+            });
+
+        } else {
+            // Desktop: Use selectionchange event for reliable detection
+            console.log('Using desktop selection handling');
+
+            let selectionTimeout = null;
+
+            document.addEventListener('selectionchange', () => {
+                // Clear any pending timeout
+                if (selectionTimeout) {
+                    clearTimeout(selectionTimeout);
+                }
+
+                // Set a new timeout to process the selection
+                selectionTimeout = setTimeout(async () => {
+                    const selection = window.getSelection();
+                    const selectedText = selection.toString().trim();
+
+                    if (selectedText.length >= 4 && !isProcessingSelection) {
+                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+                        if (range && textElement.contains(range.commonAncestorContainer)) {
+                            console.log('Desktop selection detected:', selectedText.substring(0, 30) + '...');
+                            await handleSelection();
+                        }
+                    }
+                }, 500); // Increased delay to ensure selection is complete
+            });
+        }
 
     } catch (error) {
-      console.error('Error processing selection:', error);
-      // Show error message to user
-      const messageElement = document.getElementById('message');
-      if (messageElement) {
-        messageElement.textContent = "An error occurred. Please try again.";
-        messageElement.style.display = 'flex';
-        gsap.to(messageElement, {
-          duration: 4,
-          opacity: 1,
-          onComplete: () => {
-            messageElement.textContent = "";
-            messageElement.style.display = 'none';
-          }
-        });
-      }
-    } finally {
-      // Always reset the processing flag
-      isProcessingSelection = false;
-      console.log('Selection processing unlocked');
+        console.error('Failed to initialize document:', error);
     }
-  }
-
-  // Cross-platform selection handling
-  function isMobile() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-           (window.innerWidth <= 768 && window.innerHeight <= 1024);
-  }
-
-  if (isMobile()) {
-    // Mobile: Use touch events
-    console.log('Using mobile selection handling');
-
-    textElement.addEventListener('touchend', () => {
-      // Delay to allow touch selection menu to appear/disappear
-      setTimeout(async () => {
-        const selection = window.getSelection();
-        const selectedText = selection.toString().trim();
-
-        if (selectedText.length >= 4) {
-          console.log('Mobile touch selection detected:', selectedText.substring(0, 30) + '...');
-          await handleSelection();
-        }
-      }, 400); // Increased delay for mobile touch selection
-    });
-
-    // Also listen for selection changes on mobile
-    let mobileSelectionTimeout = null;
-
-    document.addEventListener('selectionchange', () => {
-      // Clear any pending timeout
-      if (mobileSelectionTimeout) {
-        clearTimeout(mobileSelectionTimeout);
-      }
-
-      // Set a new timeout to process the selection
-      mobileSelectionTimeout = setTimeout(async () => {
-        const selection = window.getSelection();
-        const selectedText = selection.toString().trim();
-
-        if (selectedText.length >= 4 && !isProcessingSelection) {
-          const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-          if (range && textElement.contains(range.commonAncestorContainer)) {
-            console.log('Mobile selection change detected:', selectedText.substring(0, 30) + '...');
-            await handleSelection();
-          }
-        }
-      }, 400); // Increased delay for mobile selection
-    });
-
-  } else {
-    // Desktop: Use selectionchange event for reliable detection
-    console.log('Using desktop selection handling');
-
-    let selectionTimeout = null;
-
-    document.addEventListener('selectionchange', () => {
-      // Clear any pending timeout
-      if (selectionTimeout) {
-        clearTimeout(selectionTimeout);
-      }
-
-      // Set a new timeout to process the selection
-      selectionTimeout = setTimeout(async () => {
-        const selection = window.getSelection();
-        const selectedText = selection.toString().trim();
-
-        if (selectedText.length >= 4 && !isProcessingSelection) {
-          const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-          if (range && textElement.contains(range.commonAncestorContainer)) {
-            console.log('Desktop selection detected:', selectedText.substring(0, 30) + '...');
-            await handleSelection();
-          }
-        }
-      }, 500); // Increased delay to ensure selection is complete
-    });
-  }
-
-} catch (error) {
-  console.error('Failed to initialize document:', error);
-}
 });
 
 function calculateScore(phrases) {
@@ -2219,4 +2230,13 @@ function calculateScore(phrases) {
   
   console.log(`Calculated score for phrases [${phrases.join(', ')}]: ${totalScore}`);
   return totalScore;
+}
+
+let categoryData = [];
+let currentIndex = -1; // -1 indicates the passage is not in the index
+let animationTimeout;
+
+async function fetchWithCache(url) {
+    const cacheName = 'fairytale-cache';
+    // ... existing code ...
 }

@@ -457,12 +457,90 @@ export function cleanupTextContent() {
   });
 }
 
-export function showLoading() {
-  document.getElementById('loading').style.display = 'flex';
+// Loading state variables
+let isLoading = false;
+let imageAnimationInterval;
+let categoryImageUrls = [];
+
+// Initialize category images for loading animation
+export async function initializeCategoryImages() {
+    try {
+        const response = await fetch('./site-data/category-words.json');
+        const data = await response.json();
+        // Correctly map paths, assuming they are relative to the project root
+        categoryImageUrls = data.map(category => category.image); 
+        preloadImages(categoryImageUrls);
+        return true; // Indicate success
+    } catch (error) {
+        console.error('Failed to load category icons:', error);
+        return false; // Indicate failure
+    }
+}
+
+function preloadImages(urls) {
+    const imageContainer = document.getElementById('loaderImageContainer');
+    urls.forEach(url => {
+        const img = new Image();
+        img.src = url;
+        imageContainer.appendChild(img);
+    });
+}
+
+function startImageAnimation() {
+    const imageContainer = document.getElementById('loaderImageContainer');
+    if (!imageContainer || categoryImageUrls.length === 0) return;
+
+    const images = imageContainer.getElementsByTagName('img');
+    let currentIndex = 0;
+
+    // Show the first image immediately
+    if (images.length > 0) {
+        images[0].classList.add('active');
+    }
+
+    imageAnimationInterval = setInterval(() => {
+        // Hide current image
+        images[currentIndex].classList.remove('active');
+
+        // Move to the next image
+        currentIndex = (currentIndex + 1) % images.length;
+
+        // Show next image
+        images[currentIndex].classList.add('active');
+    }, 2000); // Change image every 2 seconds
+}
+
+function stopImageAnimation() {
+    clearInterval(imageAnimationInterval);
+    const imageContainer = document.getElementById('loaderImageContainer');
+    if (imageContainer) {
+        const images = imageContainer.getElementsByTagName('img');
+        for (let img of images) {
+            img.classList.remove('active');
+        }
+    }
+}
+
+export function showLoading(message) {
+    const loadingEl = document.getElementById('loading');
+    const loaderText = document.getElementById('loaderText');
+    if (loadingEl) {
+        loaderText.textContent = message || 'Loading...';
+        loadingEl.classList.remove('hidden');
+        loadingEl.style.display = 'flex';
+        isLoading = true;
+        startImageAnimation();
+    }
 }
 
 export function hideLoading() {
-  document.getElementById('loading').style.display = 'none';
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) {
+        loadingEl.classList.add('hidden');
+        loadingEl.style.display = 'none';
+        isLoading = false;
+        stopImageAnimation();
+    }
 }
 
 export function clearTextSelection() {
