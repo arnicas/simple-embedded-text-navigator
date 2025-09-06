@@ -25,7 +25,7 @@ import {
   buildTextWithWords,
   integrateWithScoreCelebration,
   initializeCategoryImages
-} from './effects.js';
+} from './effects.mjs';
 
 
 env.localModelPath = './site-data/cache';

@@ -1,10 +1,27 @@
 
 import { gsap } from 'gsap';
 
+// ===== GLOBAL CATEGORY DATA MANAGEMENT (moved to top to ensure clear module scope) =====
+let globalCategoryCounts = {};
+let globalCategoryScores = {};
+
+export function setGlobalCategoryData(counts, scores) {
+  globalCategoryCounts = counts || {};
+  globalCategoryScores = scores || {};
+}
+
+function getGlobalCategoryCount(category) {
+  return globalCategoryCounts[category] || 0;
+}
+
+function getGlobalCategoryScore(category) {
+  return globalCategoryScores[category] || 0;
+}
+
 export function randomY(x, y) {
     return Math.floor(Math.random() * (y - x + 1)) + x;
   }
-  
+
   
   
 function shuffle(a) {
@@ -468,7 +485,7 @@ export async function initializeCategoryImages() {
         const response = await fetch('./site-data/category-words.json');
         const data = await response.json();
         // Correctly map paths, assuming they are relative to the project root
-        categoryImageUrls = data.map(category => category.image); 
+        categoryImageUrls = Object.keys(data).map(key => `images/${key}.jpg`);
         preloadImages(categoryImageUrls);
         return true; // Indicate success
     } catch (error) {
@@ -637,34 +654,9 @@ export function performBucketReorder() {
     stagger: 0.02
   });
 
-  // console.log('Category buckets reordered by score then count (Yours always first):',
-  //   newOrder.map(b => {
-  //     const category = b.id.replace('bucket-', '');
-  //     const count = getGlobalCategoryCount(category) || 0;
-  //     const score = Math.round(getGlobalCategoryScore(category) || 0);
-  //     return `${category}: ${count} items (${score}pts)`;
-  //   })
-  // );
 }
-
 // ===== GLOBAL CATEGORY DATA MANAGEMENT =====
-
-// These will need to be set by main.js when initializing
-let globalCategoryCounts = {};
-let globalCategoryScores = {};
-
-export function setGlobalCategoryData(counts, scores) {
-  globalCategoryCounts = counts || {};
-  globalCategoryScores = scores || {};
-}
-
-function getGlobalCategoryCount(category) {
-  return globalCategoryCounts[category] || 0;
-}
-
-function getGlobalCategoryScore(category) {
-  return globalCategoryScores[category] || 0;
-}
+// moved to top; duplicate removed
 
 // ===== NEW ANIMATION UTILITIES FOR SMOOTH TEXT TRANSITIONS =====
 

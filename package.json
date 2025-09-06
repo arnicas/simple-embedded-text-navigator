@@ -2,9 +2,10 @@
   "name": "fairytale-embed-app",
   "version": "1.0.0",
   "description": "",
+  "type": "module",
   "scripts": {
-    "start": "parcel --no-cache index.html",
-    "build": "parcel build --public-url=./ index.html"
+    "start": "node node_modules/parcel/lib/bin.js --no-cache index.html",
+    "build": "node node_modules/parcel/lib/bin.js build --public-url=./ index.html"
   },
   "keywords": [],
   "author": "",
@@ -13,7 +14,8 @@
     "@msgpack/msgpack": "^3.0.0-beta2",
     "@xenova/transformers": "^2.5.2",
     "client-vector-search": "^0.2.0",
-    "lru-cache": "^7.1.2"
+    "lru-cache": "^7.1.2",
+    "parcel-cli": "^1.1.0"
   },
   "devDependencies": {
     "@parcel/config-default": "^2.12.0",
@@ -29,5 +31,9 @@
     "svgo": "^3.3.2",
     "textsplitr": "^0.1.1",
     "verbose": "^0.2.3"
-  }
+  },
+  "staticFiles": [
+    { "staticPath": "static/site-data", "staticOutPath": "site-data" },
+    { "staticPath": "static/images", "staticOutPath": "images" }
+  ]
 }
