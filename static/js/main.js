@@ -433,19 +433,27 @@ function getWordScoreDisplay(phrase) {
 }
 
 function getPhraseScore(phrase) {
+  const normalizedPhrase = (phrase || '').trim().toLowerCase();
+  if (!normalizedPhrase) {
+    return 0;
+  }
+
+  // Prefer exact phrase score when available
+  const phraseLevelScore = word_scores[normalizedPhrase];
+  if (typeof phraseLevelScore === 'number' && phraseLevelScore > 0) {
+    return phraseLevelScore;
+  }
+
+  // Fallback: sum token scores; ensure "Yours" tokens are at least 1
   let score = 0;
-  const words = phrase.toLowerCase().split(/\s+/);
-  words.forEach(word => {
-    // Look up word score, default to 0 if not found
+  const words = normalizedPhrase.split(/\s+/);
+  for (const word of words) {
     let wordScore = word_scores[word] || 0;
-      
-    // Special case for "Yours" category: ensure all user-added words get at least 1 point
     if (wordScore === 0 && categories.yours && categories.yours.includes(word)) {
       wordScore = 1;
     }
-
     score += wordScore;
-  });
+  }
   return score;
 }
 
