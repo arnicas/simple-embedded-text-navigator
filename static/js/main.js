@@ -27,6 +27,29 @@ import {
   initializeCategoryImages
 } from './effects.mjs';
 
+// Import UI functions from the new UI module
+import {
+  initializeUI,
+  createMetadataBuckets,
+  createCategoryBuckets,
+  showCategoryModal,
+  hideCategoryModal,
+  showYoursEditModal,
+  hideYoursEditModal,
+  updateYoursWordsDisplay,
+  showMetadataModal,
+  showTotalModal,
+  saveYoursChanges,
+  highlightPhrasesInText,
+  activateCategoryBuckets,
+  updateCategoryBuckets,
+  replaceRelatedInfo,
+  animateTextChange,
+  applyHighlightsToText,
+  fadeHighlightsToBackground
+} from './ui.mjs';
+import { ScoreManager } from './score-manager.mjs';
+
 
 env.localModelPath = './site-data/cache';
 
@@ -39,6 +62,7 @@ let currentResult = null; // Will be set to random quote on initialization
 
 let alreadySeen = [];
 let scores = {};
+let scoreManager;
 
 // ===== METADATA DISCOVERY SCORES CONFIGURATION =====
 // These values can be easily modified to adjust scoring for new discoveries
@@ -50,13 +74,10 @@ const METADATA_DISCOVERY_SCORES = {
 };
 
 // How it works:
-// - Initial screen loading doesn't count for scoring (isInitialLoad = true)
+// - Initial screen loading doesn't count for scoring (handled inside ScoreManager)
 // - After first load, each unique author/book/story discovery triggers score celebration
 // - Scoring happens in trackMetadata() function when relatedItemObject contains new metadata
 // - Multiple discoveries in one selection stack (e.g., new book + new author = 5+7 = 12 pts)
-
-// Track if this is the initial load to avoid scoring the starting quote
-let isInitialLoad = true;
 
 // Global category counters that persist across sessions
 let globalCategoryCounts = {};
@@ -244,19 +265,6 @@ function getDiscoveredMetadataCounts() {
   };
 }
 
-function getMetadataProgress() {
-  // Helper function to get progress percentages
-  const discovered = getDiscoveredMetadataCounts();
-  const total = getDatasetMetadataCounts();
-  
-  return {
-    authors: total.authors > 0 ? Math.round((discovered.authors / total.authors) * 100) : 0,
-    books: total.books > 0 ? Math.round((discovered.books / total.books) * 100) : 0,
-    stories: total.stories > 0 ? Math.round((discovered.stories / total.stories) * 100) : 0,
-    overall: total.total > 0 ? Math.round((discovered.total / total.total) * 100) : 0
-  };
-}
-
 
 function filterResults(results, selectedText) {
   // should we also filter for substring mention being same?
@@ -368,15 +376,6 @@ function filterOverlappingPhrases(phrases, text) {
 }
 
 
-// if we want a separate function for search
-function searchJs(textLine, searchString) {
-  if (!searchString) return false;
-  const escapedSearchString = searchString.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regexPattern = new RegExp('\\b' + escapedSearchString + '\\b', 'i'); // 'i' for case-insensitive
-  return regexPattern.test(textLine);
-}
-// Example: searchJs("The quick brown fox.", "fox") -> true
-
 function getCategory(text) {
   const matches = [];
   const textLower = text.toLowerCase();
@@ -424,587 +423,31 @@ function getCategory(text) {
   return matches;
 }
 
-function getWordScoreDisplay(phrase) {
-  // Only show scores for phrases that have actually been discovered
-  let phraseScore = word_scores[phrase] || 0;
-  
-  // No automatic base scores - phrases only get points when discovered
-  return { display: `${phrase} (${phraseScore} pts)`, totalScore: phraseScore };
-}
 
 function getPhraseScore(phrase) {
-  const normalizedPhrase = (phrase || '').trim().toLowerCase();
-  if (!normalizedPhrase) {
+  if (!scoreManager) {
     return 0;
   }
-
-  // Prefer exact phrase score when available
-  const phraseLevelScore = word_scores[normalizedPhrase];
-  if (typeof phraseLevelScore === 'number' && phraseLevelScore > 0) {
-    return phraseLevelScore;
-  }
-
-  // Fallback: sum token scores; ensure "Yours" tokens are at least 1
-  let score = 0;
-  const words = normalizedPhrase.split(/\s+/);
-  for (const word of words) {
-    let wordScore = word_scores[word] || 0;
-    if (wordScore === 0 && categories.yours && categories.yours.includes(word)) {
-      wordScore = 1;
-    }
-    score += wordScore;
-  }
-  return score;
+  return scoreManager.getPhraseScore(phrase);
 }
 
 function recalculateAllCategoryScores() {
-  const recalculatedScores = {};
-  for (const category in globalCategoryMatches) {
-    let categoryScore = 0;
-    const matches = globalCategoryMatches[category];
-    if (matches && Object.keys(matches).length > 0) {
-      for (const [phrase, count] of Object.entries(matches)) {
-        categoryScore += count * getPhraseScore(phrase);
-      }
-    }
-    recalculatedScores[category] = categoryScore;
+  if (!scoreManager) {
+    return {};
   }
-  return recalculatedScores;
+  return scoreManager.recalculateAllCategoryScores();
 }
 
-function createMetadataBuckets() {
-  const metadataContainer = document.getElementById('metadataBuckets');
-  metadataContainer.innerHTML = ''; // Clear existing buckets
-  
-  const metadataTypes = ['authors', 'books', 'stories', 'total'];
-  
-  metadataTypes.forEach(metadataType => {
-    const bucketDiv = document.createElement('div');
-    bucketDiv.className = 'metadataBucket';
-    bucketDiv.id = `metadata-${metadataType}`;
-    
-    const img = document.createElement('img');
-    img.src = `images/${metadataType}.jpg`;
-    img.alt = metadataType;
-    
-    // Add error handler to fallback to generic bucket image
-    img.onerror = function() {
-      this.src = 'images/bucket.jpeg';
-    };
-    
-    const label = document.createElement('div');
-    label.className = 'metadataLabel';
-    const displayName = metadataType.charAt(0).toUpperCase() + metadataType.slice(1);
-    
-    if (metadataType === 'total') {
-      label.innerHTML = `${displayName}<br><span class="total-score-display" id="metadata-count-${metadataType}">0 pts</span>`;
-    } else {
-      label.innerHTML = `${displayName}<br><span class="metadata-count" id="metadata-count-${metadataType}" style="display: none;">0</span>`;
-    }
-    
-    // Add click event listener for modal
-    bucketDiv.addEventListener('click', () => {
-      if (metadataType === 'total') {
-        showTotalModal(img.src);
-      } else {
-        showMetadataModal(metadataType, img.src);
-      }
-    });
-    
-    bucketDiv.appendChild(img);
-    bucketDiv.appendChild(label);
-    metadataContainer.appendChild(bucketDiv);
-  });
-}
 
-function createCategoryBuckets() {
-  const bucketContainer = document.getElementById('categoryBuckets');
-  bucketContainer.innerHTML = ''; // Clear existing buckets
-
-  // Get all category names from the loaded categories data
-  const categoryNames = Object.keys(categories);
-
-  // Ensure "Yours" bucket is always created first
-  const yoursIndex = categoryNames.indexOf('yours');
-  let orderedCategoryNames = [...categoryNames];
-
-  if (yoursIndex > -1) {
-    // Move "yours" to the front
-    orderedCategoryNames.splice(yoursIndex, 1);
-    orderedCategoryNames.unshift('yours');
-  }
-
-  orderedCategoryNames.forEach(categoryName => {
-    const bucketDiv = document.createElement('div');
-    bucketDiv.className = 'categoryBucket';
-    bucketDiv.id = `bucket-${categoryName}`;
-
-    const img = document.createElement('img');
-    // Try to use category-specific image, fallback to generic bucket
-    img.src = `images/${categoryName}.jpg`;
-    img.alt = categoryName;
-
-    // Add error handler to fallback to generic bucket image
-    img.onerror = function() {
-      this.src = 'images/bucket.jpeg';
-    };
-
-    const label = document.createElement('div');
-    label.className = 'categoryLabel';
-    label.innerHTML = `${categoryName}<br><span class="category-count" id="count-${categoryName}" style="display: none;">0</span>`;
-
-    // Add click event listener for modal
-    bucketDiv.addEventListener('click', () => {
-      showCategoryModal(categoryName, img.src);
-    });
-
-    bucketDiv.appendChild(img);
-    bucketDiv.appendChild(label);
-
-
-
-    bucketContainer.appendChild(bucketDiv);
-  });
-}
-
-function showCategoryModal(categoryName, imageSrc) {
-  const modal = document.getElementById('categoryModal');
-  const modalImage = document.getElementById('categoryModalImage');
-  const modalTitle = document.getElementById('categoryModalTitle');
-  const modalCount = document.getElementById('categoryModalCount');
-  const modalMatches = document.getElementById('categoryModalMatches');
-  
-  // Set modal content
-  modalImage.src = imageSrc;
-  modalImage.alt = categoryName;
-  modalImage.style.display = 'block'; // Show the image
-  
-  const matches = globalCategoryMatches[categoryName];
-
-  // Recalculate total score from the ground truth (globalCategoryMatches) to ensure consistency.
-  let totalRecalculatedScore = 0;
-  if (matches && Object.keys(matches).length > 0) {
-      for (const [phrase, count] of Object.entries(matches)) {
-          totalRecalculatedScore += count * getPhraseScore(phrase);
-      }
-  }
-
-  // Set title with count and RECALCULATED score
-  const count = globalCategoryCounts[categoryName] || 0;
-  const score = totalRecalculatedScore; // Use the recalculated score for consistency.
-  const capitalizedName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
-  if (count > 0) {
-    modalTitle.textContent = `${capitalizedName}: ${count} Found (${Math.round(score)} Points)`;
-    modalCount.style.display = 'none'; // Hide the separate count element
-  } else {
-    modalTitle.textContent = capitalizedName;
-    // Special message for "Yours" category when no words added
-    const defaultMessage = categoryName === 'yours' 
-      ? 'You can add your own text to search for, with score of 1 each.'
-      : `Keep exploring to discover ${categoryName} elements and earn points!`;
-    modalCount.textContent = defaultMessage;
-    modalCount.style.display = 'block';
-  }
-  
-  // Set matched phrases with individual word scores and counts
-  if (matches && Object.keys(matches).length > 0) {
-    const matchesArray = Object.entries(matches).sort(([phraseA], [phraseB]) => phraseA.localeCompare(phraseB));
-    
-    // Special message for "Yours" category
-    const scoringExplanation = categoryName === 'yours' 
-      ? '<p class="scoring-explanation">You can add your own text to search for, with score of 1 each.</p>'
-      : '<p class="scoring-explanation">Common items have fewer points associated with them.</p>';
-    
-    modalMatches.innerHTML = `
-      ${scoringExplanation}
-      <div class="category-matches-list">
-        ${matchesArray.map(([phrase, count]) => {
-          const scorePerItem = getPhraseScore(phrase);
-          const display = `${phrase} (${count} &times; ${scorePerItem}pts)`;
-          return `<span class="match-phrase">${display}</span>`;
-        }).join('')}
-      </div>
-    `;
-    modalMatches.style.display = 'block';
-  } else {
-    modalMatches.style.display = 'none';
-  }
-  
-  // Add edit button for "Yours" category
-  const existingEditButton = modal.querySelector('.yours-edit-button');
-  if (existingEditButton) {
-    existingEditButton.remove();
-  }
-  
-  if (categoryName === 'yours') {
-    const editButton = document.createElement('button');
-    editButton.className = 'yours-edit-button';
-    editButton.textContent = 'Edit Yours Category';
-    editButton.title = 'Edit Yours category words';
-    editButton.addEventListener('click', () => {
-      hideCategoryModal();
-      showYoursEditModal();
-    });
-    
-    // Insert the edit button within the modal body content
-    const modalBody = document.getElementById('categoryModalBody');
-    if (modalBody) {
-      modalBody.appendChild(editButton);
-    } else {
-      // Fallback: insert after modal matches
-      modal.appendChild(editButton);
-    }
-  }
-  
-  // Show modal
-  modal.classList.remove('hidden');
-}
-
-function hideCategoryModal() {
-  const modal = document.getElementById('categoryModal');
-  modal.classList.add('hidden');
-}
 
 // ===== YOURS CATEGORY EDIT MODAL FUNCTIONS =====
 
-function showYoursEditModal() {
-  const modal = document.getElementById('yoursEditModal');
-  const wordsList = document.getElementById('yoursWordsList');
-
-  // Clear the input field
-  document.getElementById('yoursNewWord').value = '';
-
-  // Display current words
-  updateYoursWordsDisplay();
-
-  // Show modal
-  modal.classList.remove('hidden');
-}
-
-function hideYoursEditModal() {
-  const modal = document.getElementById('yoursEditModal');
-  modal.classList.add('hidden');
-}
-
-function updateYoursWordsDisplay() {
-  const wordsList = document.getElementById('yoursWordsList');
-
-  if (userYoursWords.length === 0) {
-    wordsList.innerHTML = '<p class="empty-list">No words added yet. Add some words above!</p>';
-    return;
-  }
-
-  wordsList.innerHTML = userYoursWords.map((word, index) => {
-    // Check if this word exists in any preset categories
-    const presetCategories = [];
-    Object.keys(categories).forEach(categoryName => {
-      if (categoryName !== 'yours' && categories[categoryName] && categories[categoryName].includes(word.toLowerCase())) {
-        presetCategories.push(categoryName);
-      }
-    });
-    
-    // Create the notation if word exists in preset categories
-    const categoryNotation = presetCategories.length > 0 
-      ? ` <span class="yours-word-category-note">(also in ${presetCategories.join(', ')})</span>`
-      : '';
-    
-    return `
-      <div class="yours-word-item">
-        <span class="yours-word-text">${word}${categoryNotation}</span>
-        <button class="yours-remove-word" data-index="${index}" title="Remove word">×</button>
-      </div>
-    `;
-  }).join('');
-
-  // Add event listeners to remove buttons
-  wordsList.querySelectorAll('.yours-remove-word').forEach(button => {
-    button.addEventListener('click', (e) => {
-      const index = parseInt(e.target.getAttribute('data-index'));
-      removeYoursWord(index);
-    });
-  });
-}
-
-function addYoursWord() {
-  const input = document.getElementById('yoursNewWord');
-  const word = input.value.trim().toLowerCase();
-
-  if (!word) {
-    alert('Please enter a word or phrase.');
-    return;
-  }
-
-  if (userYoursWords.includes(word)) {
-    alert('This word is already in your list.');
-    return;
-  }
-
-  // Check if this word already exists in the scoring system with a higher score
-  const existingScore = word_scores[word];
-  if (existingScore && existingScore > 1) {
-    alert('This word already exists in the system with a higher score. You cannot add it to your personal category.');
-    return;
-  }
-
-  userYoursWords.push(word);
-  input.value = '';
-  updateYoursWordsDisplay();
-}
-
-function removeYoursWord(index) {
-  const wordToRemove = userYoursWords[index];
-  const normalizedWord = wordToRemove.toLowerCase();
-
-  // Remove from user list
-  userYoursWords.splice(index, 1);
-
-  // Remove from word_scores only if it has score 1 (user-added)
-  // Don't remove words with higher scores as they might be from the original dataset
-  if (word_scores[normalizedWord] === 1) {
-    delete word_scores[normalizedWord];
-  }
-
-  updateYoursWordsDisplay();
-}
-
-function saveYoursChanges() {
-  // Store the previous words to check what was removed
-  const previousWords = new Set(categories.yours || []);
-  const newWords = new Set(userYoursWords);
-  
-  // Remove words that were deleted from word_scores (but keep their scores if they were found)
-  previousWords.forEach(word => {
-    if (!newWords.has(word)) {
-      const normalizedWord = word.toLowerCase();
-      // Only remove from word_scores if it was a user-added word (score = 1)
-      // Don't remove if it has a higher score from being found
-      if (word_scores[normalizedWord] === 1) {
-        delete word_scores[normalizedWord];
-      }
-    }
-  });
-  
-  // Add new words to word_scores (but don't give them scores until discovered)
-  userYoursWords.forEach(word => {
-    const normalizedWord = word.toLowerCase();
-    // Don't add to word_scores until the phrase is actually discovered in text
-    // This ensures the modal only shows actually discovered items
-  });
-
-  // Update the categories data structure
-  categories.yours = [...userYoursWords];
-
-  // DON'T clear the global matches - preserve existing discoveries
-  // Only update the counts and scores based on current state
-  updateYoursScoreDisplay();
-  
-  // Recalculate "Yours" category scores and matches
-  recalculateYoursCategory();
-  
-  console.log('Saved "Yours" category words:', userYoursWords);
-  console.log('User words added to "Yours" category - they will get scores when discovered in text');
-
-  hideYoursEditModal();
-
-  // Optional: Show a success message
-  const messageElement = document.getElementById('message');
-  if (messageElement) {
-    messageElement.textContent = '"Yours" category updated successfully!';
-    messageElement.style.display = 'flex';
-    gsap.to(messageElement, {
-      duration: 3,
-      opacity: 1,
-      onComplete: () => {
-        messageElement.textContent = "";
-        messageElement.style.display = 'none';
-      }
-    });
-  }
-}
-
-function cancelYoursChanges() {
-  hideYoursEditModal();
-}
 
 function recalculateYoursCategory() {
-  // Initialize global matches for "yours" if it doesn't exist
-  if (!globalCategoryMatches.yours) {
-    globalCategoryMatches.yours = {};
+  if (!scoreManager) {
+    return;
   }
-  
-  // Initialize global counts and scores for "yours" if they don't exist
-  if (!globalCategoryCounts.yours) {
-    globalCategoryCounts.yours = 0;
-  }
-  if (!globalCategoryScores.yours) {
-    globalCategoryScores.yours = 0;
-  }
-  
-  // Clear existing matches - we'll rebuild based on actual discoveries
-  // globalCategoryMatches.yours.clear();
-  
-  // Recalculate based on actual discoveries in word_scores
-  let totalScore = 0;
-  let totalCount = 0;
-  
-  userYoursWords.forEach(word => {
-    const normalizedWord = word.toLowerCase();
-    let wordScore = word_scores[normalizedWord] || 0;
-    
-    // Only include items that have been actually discovered in text (score > 0)
-    // Items added by user but not yet discovered will have score 0 and won't appear
-    if (wordScore > 0) {
-      // Correctly increment the count for the word in our frequency map (object)
-      globalCategoryMatches.yours[word] = (globalCategoryMatches.yours[word] || 0) + 1;
-      totalScore += wordScore;
-      totalCount++;
-    }
-  });
-  
-  // Update global counts and scores
-  globalCategoryCounts.yours = totalCount;
-  globalCategoryScores.yours = totalScore;
-  
-  console.log(`Recalculated "Yours" category: ${totalCount} words, ${totalScore} points`);
-  console.log('Updated global counts and scores for "yours":', globalCategoryCounts.yours, globalCategoryScores.yours);
-  
-  // Update the display
-  updateYoursScoreDisplay();
-  updateTotalDisplay();
-}
-
-function showMetadataModal(metadataType, imageSrc) {
-  const modal = document.getElementById('categoryModal');
-  const modalImage = document.getElementById('categoryModalImage');
-  const modalTitle = document.getElementById('categoryModalTitle');
-  const modalCount = document.getElementById('categoryModalCount');
-  const modalMatches = document.getElementById('categoryModalMatches');
-  
-  // Set modal content
-  modalImage.src = imageSrc;
-  modalImage.alt = metadataType;
-  modalImage.style.display = 'block';
-  
-  // Set title with count and progress
-  const discovered = globalMetadataCounts[metadataType] || 0;
-  const total = totalMetadataCounts[metadataType] || 0;
-  const displayName = metadataType.charAt(0).toUpperCase() + metadataType.slice(1);
-  if (discovered > 0) {
-    const percentage = total > 0 ? Math.round((discovered / total) * 100) : 0;
-    modalTitle.textContent = `${displayName}: ${discovered}/${total} Found (${percentage}%)`;
-    modalCount.style.display = 'none';
-  } else {
-    modalTitle.textContent = displayName;
-    modalCount.textContent = `Keep exploring to discover different ${metadataType}! (${total} available)`;
-    modalCount.style.display = 'block';
-  }
-  
-  // Set matched items
-  let uniqueItems = [];
-  if (metadataType === 'authors') {
-    uniqueItems = Array.from(uniqueAuthors);
-  } else if (metadataType === 'books') {
-    uniqueItems = Array.from(uniqueBooks);
-  } else if (metadataType === 'stories') {
-    uniqueItems = Array.from(uniqueStories);
-  }
-  
-  if (uniqueItems.length > 0) {
-    const sortedItems = uniqueItems.sort();
-    modalMatches.innerHTML = `
-      <div class="category-matches-list">
-        ${sortedItems.map(item => `<span class="match-phrase">${item}</span>`).join('')}
-      </div>
-    `;
-    modalMatches.style.display = 'block';
-  } else {
-    modalMatches.style.display = 'none';
-  }
-  
-  // Show modal
-  modal.classList.remove('hidden');
-}
-
-function showTotalModal(imageSrc) {
-  const modal = document.getElementById('categoryModal');
-  const modalImage = document.getElementById('categoryModalImage');
-  const modalTitle = document.getElementById('categoryModalTitle');
-  const modalCount = document.getElementById('categoryModalCount');
-  const modalMatches = document.getElementById('categoryModalMatches');
-  
-  // Set modal content
-  modalImage.src = imageSrc;
-  modalImage.alt = 'total';
-  modalImage.style.display = 'block';
-  
-  // Calculate totals
-  const categoryPoints = Object.values(globalCategoryScores).reduce((sum, score) => sum + score, 0);
-  const metadataPoints = (globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR) + 
-                        (globalMetadataCounts.books * METADATA_DISCOVERY_SCORES.NEW_BOOK) + 
-                        (globalMetadataCounts.stories * METADATA_DISCOVERY_SCORES.NEW_STORY);
-  const totalPoints = categoryPoints + metadataPoints;
-  const totalItems = Object.values(globalCategoryCounts).reduce((sum, count) => sum + count, 0);
-  const metadataTotal = Object.values(globalMetadataCounts).reduce((sum, count) => sum + count, 0);
-  const grandTotalItems = totalItems + metadataTotal;
-  
-  // Set title
-  modalTitle.textContent = `Total Progress: ${Math.round(totalPoints)} Points`;
-  modalCount.style.display = 'none';
-  
-  // Set content showing breakdown
-  // Lynn: I don't love how claude did this inline.
-  modalMatches.innerHTML = `
-    <div style="text-align: center; font-family: 'Patrick Hand', cursive;">
-      <h3 style="color: #8B4513; margin-bottom: 15px;">Your Exploration Summary</h3>
-      
-      <div style="background: rgba(218, 165, 32, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <p style="font-size: 16px; font-weight: bold; color: #2d1810; margin: 5px 0;">
-          🏆 Total Score: ${Math.round(totalPoints)} Points
-        </p>
-        <div style="display: flex; justify-content: space-between; margin: 10px 0; padding: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;">
-          <span style="font-size: 14px; color: #555;">📊 Category Points:</span>
-          <span style="font-weight: bold; color: #2d1810;">${Math.round(categoryPoints)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin: 10px 0; padding: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;">
-          <span style="font-size: 14px; color: #555;">📚 Source Points:</span>
-          <span style="font-weight: bold; color: #2d1810;">${Math.round(metadataPoints)}</span>
-        </div>
-      </div>
-      
-      <div style="background: rgba(144, 238, 144, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <h4 style="color: #228B22; margin-bottom: 10px;">📚 The Sources</h4>
-        <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-          <span style="font-size: 14px; color: #555;">✍️ Authors (${METADATA_DISCOVERY_SCORES.NEW_AUTHOR}pts each):</span>
-          <span style="font-weight: bold; color: #228B22;">${globalMetadataCounts.authors}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-          <span style="font-size: 14px; color: #555;">📖 Books (${METADATA_DISCOVERY_SCORES.NEW_BOOK}pts each):</span>
-          <span style="font-weight: bold; color: #228B22;">${globalMetadataCounts.books}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin: 5px 0;">
-          <span style="font-size: 14px; color: #555;">📜 Stories (${METADATA_DISCOVERY_SCORES.NEW_STORY}pts each):</span>
-          <span style="font-weight: bold; color: #228B22;">${globalMetadataCounts.stories}</span>
-        </div>
-      </div>
-      
-      <div style="background: rgba(135, 206, 235, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          📊 Category Items Found: ${totalItems}
-        </p>
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          🎯 Total Items Found: ${grandTotalItems}
-        </p>
-      </div>
-      
-      <p style="font-size: 12px; color: #666; font-style: italic;">
-        Keep exploring to discover more quotes and sources and raise your score of unusual texts!
-      </p>
-    </div>
-  `;
-  modalMatches.style.display = 'block';
-  
-  // Show modal
-  modal.classList.remove('hidden');
+  scoreManager.recalculateYoursCategory();
 }
 
 function highlightPhrasesInText(text, categories) {
@@ -1098,97 +541,24 @@ function highlightPhrasesInText(text, categories) {
 // animatePhrasesToBuckets function is now imported from effects.js
 
 function initializeGlobalCounts() {
-  // Initialize global counters, scores and matches for all categories
-  if (categories && Object.keys(categories).length > 0) {
-    Object.keys(categories).forEach(categoryName => {
-      if (!(categoryName in globalCategoryCounts)) {
-        globalCategoryCounts[categoryName] = 0;
-      }
-      if (!(categoryName in globalCategoryScores)) {
-        globalCategoryScores[categoryName] = 0;
-      }
-      if (!(categoryName in globalCategoryMatches)) {
-        // Use an object to store phrase counts instead of a Set
-        globalCategoryMatches[categoryName] = {}; 
-      }
-    });
+  if (!scoreManager) {
+    return;
   }
+  scoreManager.initializeGlobalCounts(categories);
 }
 
 function incrementCategoryCounts(selectedCategories, foundCategories) {
-  // Increment global counters and scores, track matched phrases
-  const newCounts = {};
-  const newScores = {};
-  
-  const processMatches = (matches) => {
-    matches.forEach(match => {
-      const phraseCounts = match.phrases; // e.g., { "sun": 3, "moon": 1 }
-      const totalItemsInCategory = Object.values(phraseCounts).reduce((sum, count) => sum + count, 0);
-
-      newCounts[match.category] = (newCounts[match.category] || 0) + totalItemsInCategory;
-      newScores[match.category] = (newScores[match.category] || 0) + (match.score || 0);
-      
-      if (!globalCategoryMatches[match.category]) {
-        globalCategoryMatches[match.category] = {};
-      }
-      
-      // Increment the global frequency map for each phrase
-      for (const [phrase, count] of Object.entries(phraseCounts)) {
-        const p = phrase.toLowerCase();
-        globalCategoryMatches[match.category][p] = (globalCategoryMatches[match.category][p] || 0) + count;
-      }
-    });
-  };
-
-  processMatches(selectedCategories);
-  processMatches(foundCategories);
-  
-  // Add to global counters and scores
-  Object.entries(newCounts).forEach(([category, count]) => {
-    globalCategoryCounts[category] = (globalCategoryCounts[category] || 0) + count;
-  });
-  Object.entries(newScores).forEach(([category, score]) => {
-    globalCategoryScores[category] = (globalCategoryScores[category] || 0) + score;
-  });
-  
-  console.log('Updated global category counts:', globalCategoryCounts);
-  console.log('Updated global category scores:', globalCategoryScores);
-  console.log('Updated global category matches:', globalCategoryMatches);
-
-  // Update effects.js with latest category data for bucket reordering
-  setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
-  
-  // Trigger single score celebration for total score from this selection
-  const totalNewScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
-  console.log(`Total score for this selection: ${totalNewScore}`);
-  
-  // Store the current selection's score to be celebrated later
-  // Don't accumulate - just use the score from this selection
-  window.pendingCategoryScore = totalNewScore;
-  
-  // Update total display after category scoring is processed
-  updateTotalDisplay();
+  if (!scoreManager) {
+    return;
+  }
+  scoreManager.incrementCategoryCounts(selectedCategories, foundCategories);
 }
 
 function triggerPendingCategoryCelebration() {
-  // Guard against duplicate celebrations from the same score
-  if (window.lastCelebratedScore === window.pendingCategoryScore) {
-    console.log('Score already celebrated, skipping duplicate celebration');
+  if (!scoreManager) {
     return;
   }
-  
-  // Trigger celebration for accumulated category scores
-  if (window.pendingCategoryScore && window.pendingCategoryScore > 1) {
-    console.log(`Triggering accumulated category celebration: ${window.pendingCategoryScore}pts`);
-    showCategoryScoreCelebration(Math.round(window.pendingCategoryScore));
-    
-    // Track this score as celebrated to prevent duplicates
-    window.lastCelebratedScore = window.pendingCategoryScore;
-    window.pendingCategoryScore = 0; // Reset after celebrating
-    
-    // Update total display after celebration is triggered
-    updateTotalDisplay();
-  }
+  scoreManager.triggerPendingCategoryCelebration();
 }
 
 // Score celebration functions are now imported from effects.js
@@ -1196,92 +566,31 @@ function triggerPendingCategoryCelebration() {
 // cleanupTextContent function is now imported from effects.js
 
 function updateCategoryCountsDisplay() {
-  const correctScores = recalculateAllCategoryScores();
-  console.log('Updating category display - counts:', globalCategoryCounts, 'scores:', correctScores);
-  Object.keys(globalCategoryCounts).forEach(category => {
-    const count = globalCategoryCounts[category] || 0;
-    const score = correctScores[category] || 0;
-    const countElement = document.getElementById(`count-${category}`);
-    if (countElement) {
-      if (count > 0 || score > 0) {
-        const displayText = `${Math.round(score)} (${count})`;
-        countElement.textContent = displayText;
-        countElement.style.display = 'inline';
-        console.log(`Set ${category} display to: ${displayText}`);
-      } else {
-        countElement.style.display = 'none';
-      }
-    }
-  });
-  
-  // Update "Yours" score display
-  updateYoursScoreDisplay();
-
-  // Update total display whenever category scores change
-  updateTotalDisplay();
+  if (!scoreManager) {
+    return;
+  }
+  scoreManager.updateCategoryCountsDisplay();
 }
 
 function updateMetadataCountsDisplay() {
-  // Update the UI to show metadata counts with progress
-  console.log('Updating metadata display:', globalMetadataCounts);
-  Object.keys(globalMetadataCounts).forEach(metadataType => {
-    const discovered = globalMetadataCounts[metadataType] || 0;
-    const total = totalMetadataCounts[metadataType] || 0;
-    const countElement = document.getElementById(`metadata-count-${metadataType}`);
-    console.log(`Updating ${metadataType}: discovered=${discovered}, total=${total}, element exists=${!!countElement}`);
-    if (countElement) {
-      if (discovered > 0) {
-        // Show discovered/total format with checkmark if completed
-        const isComplete = discovered === total;
-        const checkmark = isComplete ? ' ✓' : '';
-        countElement.textContent = `${discovered}/${total}${checkmark}`;
-        countElement.style.display = 'inline';
-        console.log(`Set ${metadataType} display to: ${discovered}/${total}${checkmark} (complete: ${isComplete})`);
-      } else {
-        countElement.style.display = 'none';
-      }
-    }
-  });
-  
-  // Update total bucket display
-  updateTotalDisplay();
+  if (!scoreManager) {
+    return;
+  }
+  scoreManager.updateMetadataCountsDisplay();
 }
 
 function updateYoursScoreDisplay() {
-  const count = globalCategoryCounts.yours || 0;
-  const score = globalCategoryScores.yours || 0;
-  const countElement = document.getElementById('count-yours');
-
-  if (countElement) {
-    // Update the standard category count display
-    countElement.textContent = `${Math.round(score)} (${count})`;
-    countElement.style.display = 'inline';
-    console.log(`Set Yours count display to: ${Math.round(score)} (${count})`);
-  } else {
-    console.warn('count-yours element not found');
+  if (!scoreManager) {
+    return;
   }
+  scoreManager.updateYoursScoreDisplay();
 }
 
 function updateTotalDisplay() {
-  const correctScores = recalculateAllCategoryScores();
-  // Calculate total category points
-  const categoryPoints = Object.values(correctScores).reduce((sum, score) => sum + score, 0);
-  
-  // Calculate total metadata points
-  const metadataPoints = (globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR) +
-                        (globalMetadataCounts.books * METADATA_DISCOVERY_SCORES.NEW_BOOK) +
-                        (globalMetadataCounts.stories * METADATA_DISCOVERY_SCORES.NEW_STORY);
-  
-  // Total points is sum of both
-  const totalPoints = categoryPoints + metadataPoints;
-  
-  const totalPointsElement = document.getElementById('metadata-count-total');
-
-  if (totalPointsElement) {
-    totalPointsElement.textContent = `${Math.round(totalPoints)} pts`;
-    totalPointsElement.style.display = 'inline';
-    console.log(`Set total points display to: ${Math.round(totalPoints)} pts (Categories: ${Math.round(categoryPoints)}, Metadata: ${Math.round(metadataPoints)})`);
+  if (!scoreManager) {
+    return;
   }
+  scoreManager.updateTotalDisplay();
 }
 
 // Throttle reordering to prevent excessive animations
@@ -1651,79 +960,19 @@ function replaceRelatedInfo(relatedItemObject) {
   updateBackgroundForScore(relatedItemObject.score);
 } 
 
+
 function trackMetadata(relatedItemObject) {
-  // Track unique authors, books, and stories AND store discoveries for later celebration
-  let metadataUpdated = false;
-  
-  // Check for new author discovery
-  if (relatedItemObject.author && relatedItemObject.author !== "None" && !uniqueAuthors.has(relatedItemObject.author)) {
-    uniqueAuthors.add(relatedItemObject.author);
-    globalMetadataCounts.authors = uniqueAuthors.size;
-    metadataUpdated = true;
-    
-    if (!isInitialLoad) {
-      pendingMetadataDiscoveries.newAuthor = relatedItemObject.author;
-      pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_AUTHOR;
-     // console.log(`NEW AUTHOR DISCOVERED: ${relatedItemObject.author} (scoring deferred)`);
-    }
+  if (!scoreManager) {
+    return;
   }
-  
-  // Check for new book discovery  
-  if (relatedItemObject.title && !uniqueBooks.has(relatedItemObject.title)) {
-    uniqueBooks.add(relatedItemObject.title);
-    globalMetadataCounts.books = uniqueBooks.size;
-    metadataUpdated = true;
-    
-    if (!isInitialLoad) {
-      pendingMetadataDiscoveries.newBook = relatedItemObject.title;
-      pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_BOOK;
-     // console.log(`NEW BOOK DISCOVERED: ${relatedItemObject.title} (scoring deferred)`);
-    }
-  }
-  
-  // Check for new story discovery
-  if (relatedItemObject.story_title && relatedItemObject.story_title !== "None" && relatedItemObject.story_title !== "" && !uniqueStories.has(relatedItemObject.story_title)) {
-    uniqueStories.add(relatedItemObject.story_title);
-    globalMetadataCounts.stories = uniqueStories.size;
-    metadataUpdated = true;
-    
-    if (!isInitialLoad) {
-      pendingMetadataDiscoveries.newStory = relatedItemObject.story_title;
-      pendingMetadataDiscoveries.totalPoints += METADATA_DISCOVERY_SCORES.NEW_STORY;
-     // console.log(`NEW STORY DISCOVERED: ${relatedItemObject.story_title} (scoring deferred)`);
-    }
-  }
-  
-  if (metadataUpdated) {
-    updateMetadataCountsDisplay();
-  }
+  scoreManager.trackMetadata(relatedItemObject);
 }
 
-// Store the newly discovered metadata for later celebration
-let pendingMetadataDiscoveries = {
-  newAuthor: null,
-  newBook: null, 
-  newStory: null,
-  totalPoints: 0
-};
-
 function calculateAndCelebrateMetadataScore() {
-  // Celebrate the pending metadata discoveries
-  if (pendingMetadataDiscoveries.totalPoints > 0 && !isInitialLoad) {
-    console.log(`Celebrating deferred metadata discoveries: +${pendingMetadataDiscoveries.totalPoints} pts`);
-    showMetadataScoreCelebration(pendingMetadataDiscoveries.totalPoints);
+  if (!scoreManager) {
+    return;
   }
-  
-  // Reset pending discoveries
-  pendingMetadataDiscoveries = {
-    newAuthor: null,
-    newBook: null,
-    newStory: null,
-    totalPoints: 0
-  };
-  
-  // Update total display after metadata discoveries are processed
-  updateTotalDisplay();
+  scoreManager.calculateAndCelebrateMetadataScore();
 }
 
 
@@ -1826,14 +1075,66 @@ async function initialize() {
       await loadFiles();
       index = await createIndex();
 
+      scoreManager = new ScoreManager({
+        categories,
+        wordScores: word_scores,
+        userYoursWords,
+        metadataDiscoveryScores: METADATA_DISCOVERY_SCORES,
+        globalCategoryCounts,
+        globalCategoryScores,
+        globalCategoryMatches,
+        globalMetadataCounts,
+        totalMetadataCounts,
+        uniqueAuthors,
+        uniqueBooks,
+        uniqueStories,
+        setGlobalCategoryData,
+        showCategoryScoreCelebration,
+        showMetadataScoreCelebration
+      });
+
       // Create category buckets after data is loaded
-      createCategoryBuckets();
+      createCategoryBuckets(categories);
       createMetadataBuckets();
 
       // Initialize global category counters
       initializeGlobalCounts();
+      recalculateYoursCategory();
       // Share global category data with effects.js for bucket reordering
       setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
+
+      // Initialize the UI module with all necessary state and callbacks
+      initializeUI({
+          scoreManager: scoreManager,
+          // State references
+          categories: categories,
+          globalCategoryCounts: globalCategoryCounts,
+          globalCategoryScores: globalCategoryScores,
+          globalCategoryMatches: globalCategoryMatches,
+          globalMetadataCounts: globalMetadataCounts,
+          totalMetadataCounts: totalMetadataCounts,
+          word_scores: word_scores,
+          userYoursWords: userYoursWords,
+          METADATA_DISCOVERY_SCORES: METADATA_DISCOVERY_SCORES,
+          uniqueAuthors: uniqueAuthors,
+          uniqueBooks: uniqueBooks,
+          uniqueStories: uniqueStories,
+          
+          // Callback functions
+          saveYoursChanges: saveYoursChanges,
+          findRelatedText: findRelatedText,
+          getPhraseScore: getPhraseScore,
+          recalculateAllCategoryScores: recalculateAllCategoryScores,
+          updateYoursScoreDisplay: updateYoursScoreDisplay,
+          updateTotalDisplay: updateTotalDisplay,
+          updateMetadataCountsDisplay: updateMetadataCountsDisplay,
+          reorderCategoryBuckets: reorderCategoryBuckets,
+          trackMetadata: trackMetadata,
+          calculateAndCelebrateMetadataScore: calculateAndCelebrateMetadataScore,
+          triggerPendingCategoryCelebration: triggerPendingCategoryCelebration,
+          incrementCategoryCounts: incrementCategoryCounts
+      });
+
       updateCategoryCountsDisplay();
       updateMetadataCountsDisplay();
 
@@ -1841,7 +1142,9 @@ async function initialize() {
       setRandomStartingQuote();
 
       // Mark initial load as complete to enable scoring for subsequent discoveries
-      isInitialLoad = false;
+      if (scoreManager) {
+        scoreManager.markInitialLoadComplete();
+      }
 
       hideLoading(); // Hide loading after initialization is complete
 
@@ -1871,95 +1174,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initialize();
 
         const textElement = document.getElementById('text');
-
-        // Help modal functionality
-        const helpButton = document.getElementById('helpButton');
-        const helpModal = document.getElementById('helpModal');
-        const closeButton = helpModal.querySelector('.close');
-
-        // Show help modal
-        helpButton.addEventListener('click', () => {
-            helpModal.classList.remove('hidden');
-        });
-
-        // Hide help modal when clicking close button
-        closeButton.addEventListener('click', () => {
-            helpModal.classList.add('hidden');
-        });
-
-        // Hide help modal when clicking outside the modal content
-        helpModal.addEventListener('click', (e) => {
-            if (e.target === helpModal) {
-                helpModal.classList.add('hidden');
-            }
-        });
-
-        // Category modal functionality
-        const categoryModal = document.getElementById('categoryModal');
-        const categoryCloseButton = document.getElementById('categoryModalClose');
-
-        // Hide category modal when clicking close button
-        categoryCloseButton.addEventListener('click', () => {
-            hideCategoryModal();
-        });
-
-        // Hide category modal when clicking outside the modal content
-        categoryModal.addEventListener('click', (e) => {
-            if (e.target === categoryModal) {
-                hideCategoryModal();
-            }
-        });
-
-        // ===== YOURS EDIT MODAL EVENT LISTENERS =====
-
-        // Yours edit modal elements
-        const yoursEditModal = document.getElementById('yoursEditModal');
-        const yoursEditModalClose = document.getElementById('yoursEditModalClose');
-        const yoursAddWord = document.getElementById('yoursAddWord');
-        const yoursNewWord = document.getElementById('yoursNewWord');
-        const yoursSaveButton = document.getElementById('yoursSaveButton');
-        const yoursCancelButton = document.getElementById('yoursCancelButton');
-
-        // Close modal when clicking X
-        yoursEditModalClose.addEventListener('click', hideYoursEditModal);
-
-        // Close modal when clicking outside
-        yoursEditModal.addEventListener('click', (e) => {
-            if (e.target === yoursEditModal) {
-                hideYoursEditModal();
-            }
-        });
-
-        // Add word button
-        yoursAddWord.addEventListener('click', addYoursWord);
-
-        // Add word on Enter key
-        yoursNewWord.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                addYoursWord();
-            }
-        });
-
-        // Save button
-        yoursSaveButton.addEventListener('click', saveYoursChanges);
-
-        // Cancel button
-        yoursCancelButton.addEventListener('click', cancelYoursChanges);
-
-        // Hide modals with Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                if (!helpModal.classList.contains('hidden')) {
-                    helpModal.classList.add('hidden');
-                }
-                if (!categoryModal.classList.contains('hidden')) {
-                    hideCategoryModal();
-                }
-                if (!yoursEditModal.classList.contains('hidden')) {
-                    hideYoursEditModal();
-                }
-            }
-        });
 
         // Simplified selection handler - only use mouseup for reliability
         let isProcessingSelection = false;
@@ -2121,4 +1335,3 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Failed to initialize document:', error);
     }
 });
-
