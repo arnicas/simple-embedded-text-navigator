@@ -36,6 +36,7 @@ export class ScoreManager {
     this.lastCelebratedScore = null;
     this.pendingMetadataDiscoveries = this.#createPendingMetadataState();
     this.isInitialLoad = true;
+    this.skipNextSelectedCategoriesIncrement = false;
   }
 
   setCategories(categories) {
@@ -146,6 +147,10 @@ export class ScoreManager {
       return phraseLevelScore;
     }
 
+    if (this.categories.yours && this.categories.yours.some((entry) => (entry || '').toLowerCase() === normalizedPhrase)) {
+      return 1;
+    }
+
     let score = 0;
     const words = normalizedPhrase.split(/\s+/);
     for (const word of words) {
@@ -177,24 +182,33 @@ export class ScoreManager {
     if (!this.globalCategoryMatches.yours) {
       this.globalCategoryMatches.yours = {};
     }
-    if (!this.globalCategoryCounts.yours) {
-      this.globalCategoryCounts.yours = 0;
-    }
-    if (!this.globalCategoryScores.yours) {
-      this.globalCategoryScores.yours = 0;
-    }
+
+    const activeUserWords = new Set(this.userYoursWords.map((word) => word.toLowerCase()));
+
+    Object.keys(this.globalCategoryMatches.yours).forEach((phrase) => {
+      if (!activeUserWords.has(phrase.toLowerCase())) {
+        delete this.globalCategoryMatches.yours[phrase];
+      }
+    });
 
     let totalScore = 0;
     let totalCount = 0;
 
-    this.userYoursWords.forEach((word) => {
-      const normalizedWord = word.toLowerCase();
-      const wordScore = this.wordScores[normalizedWord] || 0;
-      if (wordScore > 0) {
-        this.globalCategoryMatches.yours[word] = (this.globalCategoryMatches.yours[word] || 0) + 1;
-        totalScore += wordScore;
-        totalCount += 1;
+    Object.entries(this.globalCategoryMatches.yours).forEach(([phrase, count]) => {
+      const normalizedPhrase = phrase.toLowerCase();
+      if (!activeUserWords.has(normalizedPhrase) || count <= 0) {
+        delete this.globalCategoryMatches.yours[phrase];
+        return;
       }
+
+      const phraseScore = this.getPhraseScore(phrase);
+      if (phraseScore <= 0) {
+        delete this.globalCategoryMatches.yours[phrase];
+        return;
+      }
+
+      totalCount += count;
+      totalScore += phraseScore * count;
     });
 
     this.globalCategoryCounts.yours = totalCount;
@@ -227,7 +241,11 @@ export class ScoreManager {
       });
     };
 
-    processMatches(selectedCategories);
+    if (this.skipNextSelectedCategoriesIncrement) {
+      this.skipNextSelectedCategoriesIncrement = false;
+    } else {
+      processMatches(selectedCategories);
+    }
     processMatches(foundCategories);
 
     Object.entries(newCounts).forEach(([category, count]) => {
@@ -242,6 +260,10 @@ export class ScoreManager {
     this.pendingCategoryScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
 
     this.updateTotalDisplay();
+  }
+
+  skipSelectedCategoriesOnNextIncrement() {
+    this.skipNextSelectedCategoriesIncrement = true;
   }
 
   triggerPendingCategoryCelebration() {

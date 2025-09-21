@@ -236,13 +236,20 @@ function setRandomStartingQuote() {
   // Process the initial categories and update scores
   if (foundCategories.length > 0) {
     //console.log('Processing initial categories for scoring');
-    
+
+    // Count these discoveries immediately so the UI reflects the opening text.
+    incrementCategoryCounts([], foundCategories);
+    if (scoreManager && typeof scoreManager.skipSelectedCategoriesOnNextIncrement === 'function') {
+      scoreManager.skipSelectedCategoriesOnNextIncrement();
+    }
+    updateCategoryCountsDisplay();
+
     // Reorder buckets based on initial scores
     gsap.delayedCall(0.5, () => {
       reorderCategoryBuckets();
     });
   }
-  
+
 }
 
 function getDatasetMetadataCounts() {

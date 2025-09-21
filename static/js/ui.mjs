@@ -589,6 +589,8 @@ export function showTotalModal(imageSrc) {
   // Calculate totals
   const correctScores = recalculateAllCategoryScoresCallback();
   const categoryPoints = Object.values(correctScores).reduce((sum, score) => sum + score, 0);
+  const yoursPoints = correctScores.yours || 0;
+  const nonYoursPoints = Math.max(0, categoryPoints - yoursPoints);
   
   // Metadata discoveries no longer award points; total matches category points.
   const totalPoints = categoryPoints;
@@ -619,6 +621,14 @@ export function showTotalModal(imageSrc) {
         <div style="display: flex; justify-content: space-between; margin: 10px 0; padding: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;">
           <span style="font-size: 14px; color: #555;">📊 Category Points:</span>
           <span style="font-weight: bold; color: #2d1810;">${Math.round(categoryPoints)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin: 5px 0; padding: 6px 8px; background: rgba(255,255,255,0.2); border-radius: 4px;">
+          <span style="font-size: 13px; color: #555;">• Story Categories:</span>
+          <span style="font-weight: bold; color: #2d1810;">${Math.round(nonYoursPoints)}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin: 5px 0; padding: 6px 8px; background: rgba(255,255,255,0.2); border-radius: 4px;">
+          <span style="font-size: 13px; color: #555;">• Yours Items:</span>
+          <span style="font-weight: bold; color: #2d1810;">${Math.round(yoursPoints)}</span>
         </div>
       </div>
       
