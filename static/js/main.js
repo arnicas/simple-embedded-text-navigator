@@ -43,7 +43,6 @@ import {
   highlightPhrasesInText,
   activateCategoryBuckets,
   updateCategoryBuckets,
-  replaceRelatedInfo,
   animateTextChange,
   applyHighlightsToText,
   fadeHighlightsToBackground
@@ -239,9 +238,6 @@ function setRandomStartingQuote() {
 
     // Count these discoveries immediately so the UI reflects the opening text.
     incrementCategoryCounts([], foundCategories);
-    if (scoreManager && typeof scoreManager.skipSelectedCategoriesOnNextIncrement === 'function') {
-      scoreManager.skipSelectedCategoriesOnNextIncrement();
-    }
     updateCategoryCountsDisplay();
 
     // Reorder buckets based on initial scores
@@ -336,98 +332,76 @@ async function findRelatedText(selectedText) {
 }
 
 
-function filterOverlappingPhrases(phrases, text) {
-  // Sort phrases by length (longest first) to prioritize longer matches
-  const sortedPhrases = [...phrases].sort((a, b) => b.length - a.length);
-  const filteredPhrases = [];
-  const usedPositions = new Set();
-  
-  for (const phrase of sortedPhrases) {
-    const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-    let match;
-    let foundMatch = false;
-    
-    // Find all matches of this phrase
-    while ((match = regex.exec(text)) !== null) {
-      const start = match.index;
-      const end = match.index + match[0].length;
-      
-      // Check if this position overlaps with any already used position
-      let overlaps = false;
-      for (let i = start; i < end; i++) {
-        if (usedPositions.has(i)) {
-          overlaps = true;
-          break;
-        }
-      }
-      
-      // If no overlap, use this match
-      if (!overlaps) {
-        // Mark all positions as used
-        for (let i = start; i < end; i++) {
-          usedPositions.add(i);
-        }
-        foundMatch = true;
-      }
-      
-      // Reset regex lastIndex to continue searching
-      regex.lastIndex = match.index + 1;
-    }
-    
-    if (foundMatch) {
-      filteredPhrases.push(phrase);
-    }
-  }
-  
-  return filteredPhrases;
-}
-
-
 function getCategory(text) {
-  const matches = [];
   const textLower = text.toLowerCase();
-  
-  for (const [categoryName, phrases] of Object.entries(categories)) {
-    // Step 1: Find all unique phrases that are present in the text.
-    const matchedPhrases = [];
-    for (const phrase of phrases) {
-      const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-      if (regex.test(textLower)) {
-        matchedPhrases.push(phrase);
-      }
+  const candidateMatches = [];
+
+  const escapePhrase = (phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  Object.entries(categories).forEach(([categoryName, phrases]) => {
+    if (!Array.isArray(phrases)) {
+      return;
     }
-    
-    if (matchedPhrases.length > 0) {
-      // Step 2: Filter the found phrases to resolve overlaps (e.g., prefer "large stone" over "stone").
-      const filteredPhrases = filterOverlappingPhrases(matchedPhrases, textLower);
-      
-      if (filteredPhrases.length > 0) {
-        // Step 3: Count the occurrences of only the filtered, valid phrases.
-        const phraseCounts = {};
-        let totalScoreForCategory = 0;
-        
-        filteredPhrases.forEach(phrase => {
-          const regex = new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-          const occurrences = (textLower.match(regex) || []).length;
-          if (occurrences > 0) {
-            phraseCounts[phrase] = occurrences;
-            totalScoreForCategory += occurrences * getPhraseScore(phrase);
-          }
+
+    phrases.forEach((phrase) => {
+      const trimmedPhrase = (phrase || '').trim();
+      if (!trimmedPhrase) {
+        return;
+      }
+
+      const regex = new RegExp(`\\b${escapePhrase(trimmedPhrase)}\\b`, 'gi');
+      let match;
+      while ((match = regex.exec(textLower)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+
+        candidateMatches.push({
+          category: categoryName,
+          phrase: trimmedPhrase,
+          start,
+          end,
+          length: end - start
         });
 
-        // Step 4: Add the results for this category to our final list.
-        if (Object.keys(phraseCounts).length > 0) {
-            matches.push({
-              category: categoryName,
-              phrases: phraseCounts, // Return object with phrases and their counts
-              score: totalScoreForCategory // Return the accurately calculated total score
-            });
-        }
+        regex.lastIndex = match.index + 1;
       }
+    });
+  });
+
+  candidateMatches.sort((a, b) => {
+    if (b.length !== a.length) {
+      return b.length - a.length;
     }
-  }
-  
-  return matches;
+    return a.start - b.start;
+  });
+
+  const usedRanges = [];
+  const acceptedMatches = [];
+
+  const overlaps = (start, end) => {
+    return usedRanges.some((range) => start < range.end && end > range.start);
+  };
+
+  candidateMatches.forEach((candidate) => {
+    if (!overlaps(candidate.start, candidate.end)) {
+      acceptedMatches.push(candidate);
+      usedRanges.push({ start: candidate.start, end: candidate.end });
+    }
+  });
+
+  const categoryAggregates = new Map();
+
+  acceptedMatches.forEach(({ category, phrase }) => {
+    if (!categoryAggregates.has(category)) {
+      categoryAggregates.set(category, { category, phrases: {}, score: 0 });
+    }
+
+    const aggregate = categoryAggregates.get(category);
+    aggregate.phrases[phrase] = (aggregate.phrases[phrase] || 0) + 1;
+    aggregate.score += getPhraseScore(phrase);
+  });
+
+  return Array.from(categoryAggregates.values());
 }
 
 
@@ -931,6 +905,11 @@ function fadeHighlightsToBackground() {
 // updateBackgroundForScore function is now imported from effects.js
 
 function replaceRelatedInfo(relatedItemObject) {
+  console.log('[Debug] replaceRelatedInfo invoked', {
+    id: relatedItemObject?.id,
+    score: relatedItemObject?.score,
+    foundCategories: relatedItemObject?.foundCategories || []
+  });
 
   const relatedAuthorElement = document.getElementById('relatedAuthor');
   const relatedTitleElement = document.getElementById('relatedTitle');
@@ -958,8 +937,21 @@ function replaceRelatedInfo(relatedItemObject) {
     relatedStoryTitleElement.textContent = '"' + relatedItemObject.story_title + '"';
   }
   
-  relatedScoreElement.textContent = "Similarity: " + relatedItemObject.score.toFixed(2).toString();
-  
+  const sentencePoints = (relatedItemObject.foundCategories || []).reduce((sum, entry) => {
+    const categoryScore = typeof entry.score === 'number' ? entry.score : 0;
+    return sum + categoryScore;
+  }, 0);
+
+  const similarityText = `Similarity: ${relatedItemObject.score.toFixed(2)}`;
+  const sentencePointsText = `Sentence pts: ${Math.round(sentencePoints)}`;
+  relatedScoreElement.textContent = `${similarityText} | ${sentencePointsText}`;
+
+  console.log('[Sentence Score]', {
+    sentencePoints,
+    rounded: Math.round(sentencePoints),
+    foundCategories: relatedItemObject.foundCategories || []
+  });
+
   // Track metadata
   trackMetadata(relatedItemObject);
 

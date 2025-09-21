@@ -1022,48 +1022,6 @@ export function updateCategoryBuckets(selectedCategories, foundCategories) {
   }
 }
 
-export function replaceRelatedInfo(relatedItemObject) {
-  const relatedAuthorElement = document.getElementById('relatedAuthor');
-  const relatedTitleElement = document.getElementById('relatedTitle');
-  const relatedStoryTitleElement = document.getElementById('relatedStoryTitle');
-  const relatedScoreElement = document.getElementById('relatedScore');
-
-  if (!relatedAuthorElement || !relatedTitleElement || !relatedStoryTitleElement || !relatedScoreElement) {
-    console.error('One or more metadata elements not found:', {
-      relatedAuthorElement,
-      relatedTitleElement,
-      relatedStoryTitleElement,
-      relatedScoreElement
-    });
-    return;
-  }
-
-  if (relatedItemObject.author === "None") {
-    relatedAuthorElement.textContent = "No author found";
-  } else {
-    relatedAuthorElement.textContent = relatedItemObject.author;
-  }
-
-  // Create title with linked ID in parentheses
-  // Extract numeric part from ID (handles PG12345, 12345, PG12345_2, etc.)
-  const numericId = relatedItemObject.id.replace(/^PG/, '').replace(/_.*$/, '');
-  const gutenbergUrl = `https://www.gutenberg.org/ebooks/${numericId}`;
-  relatedTitleElement.innerHTML = `${relatedItemObject.title} (<a href="${gutenbergUrl}" target="_blank" class="gutenberg-link">${relatedItemObject.id}</a>)`;
-  
-  if (relatedItemObject.story_title === "None" || !relatedItemObject.story_title) {
-    relatedStoryTitleElement.textContent = "";
-  } else {
-    relatedStoryTitleElement.textContent = '"' + relatedItemObject.story_title + '"';
-  }
-  
-  relatedScoreElement.textContent = "Similarity: " + relatedItemObject.score.toFixed(2).toString();
-  
-  // Track metadata
-  if (trackMetadataCallback) {
-    trackMetadataCallback(relatedItemObject);
-  }
-}
-
 export function animateTextChange(element, selectedText, newText, currentResult) {
   // For now, use a simple, reliable text change to ensure proper rendering
   // We'll add the smooth animations back once the basic functionality works

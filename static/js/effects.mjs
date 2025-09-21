@@ -238,7 +238,7 @@ export function showMetadataScoreCelebration(score) {
     const startX = rect.left + (rect.width / 2);
     const startY = rect.top + (rect.height / 2);
     showMetadataScoreCelebrationWithPink(score, startX, startY);
-    console.log(`Metadata score celebration started from metadata area (${Math.round(startX)}, ${Math.round(startY)})`);
+   // console.log(`Metadata score celebration started from metadata area (${Math.round(startX)}, ${Math.round(startY)})`);
   } else {
     // Fallback to default center position
     showMetadataScoreCelebrationWithPink(score);
@@ -309,7 +309,7 @@ export function showMetadataScoreCelebrationWithPink(score, startX = null, start
 // ===== TEXT AND BUCKET ANIMATIONS =====
 
 export function animatePhrasesToBuckets(highlights, onComplete) {
-  console.log('animatePhrasesToBuckets called with highlights:', highlights);
+  //console.log('animatePhrasesToBuckets called with highlights:', highlights);
 
   if (highlights.length === 0) {
     if (onComplete) onComplete();
@@ -325,11 +325,12 @@ export function animatePhrasesToBuckets(highlights, onComplete) {
       const phraseElement = document.getElementById(highlight.id);
       const bucket = document.getElementById(`bucket-${highlight.category}`);
 
-      console.log(`Animating highlight ${highlight.id}:`, {
+      /*console.log(`Animating highlight ${highlight.id}:`, {
         phraseElement: !!phraseElement,
         bucket: !!bucket,
         category: highlight.category
-      });
+    });*/
+
 
       if (!phraseElement || !bucket) {
         console.log('Missing elements for animation:', {

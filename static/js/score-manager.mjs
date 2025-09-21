@@ -36,7 +36,6 @@ export class ScoreManager {
     this.lastCelebratedScore = null;
     this.pendingMetadataDiscoveries = this.#createPendingMetadataState();
     this.isInitialLoad = true;
-    this.skipNextSelectedCategoriesIncrement = false;
   }
 
   setCategories(categories) {
@@ -241,11 +240,7 @@ export class ScoreManager {
       });
     };
 
-    if (this.skipNextSelectedCategoriesIncrement) {
-      this.skipNextSelectedCategoriesIncrement = false;
-    } else {
-      processMatches(selectedCategories);
-    }
+    // Only award points for newly discovered matches (found categories).
     processMatches(foundCategories);
 
     Object.entries(newCounts).forEach(([category, count]) => {
@@ -260,10 +255,6 @@ export class ScoreManager {
     this.pendingCategoryScore = Object.values(newScores).reduce((sum, score) => sum + score, 0);
 
     this.updateTotalDisplay();
-  }
-
-  skipSelectedCategoriesOnNextIncrement() {
-    this.skipNextSelectedCategoriesIncrement = true;
   }
 
   triggerPendingCategoryCelebration() {
@@ -290,7 +281,7 @@ export class ScoreManager {
       }
 
       if (count > 0 || score > 0) {
-        const displayText = `${Math.round(score)} (${count})`;
+        const displayText = `${Math.round(score)} pts (${count})`;
         countElement.textContent = displayText;
         countElement.style.display = 'inline';
       } else {
