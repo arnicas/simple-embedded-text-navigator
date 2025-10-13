@@ -1,4 +1,4 @@
-import { initializeModel, getEmbedding, EmbeddingIndex } from 'client-vector-search';
+import { initializeModel, getEmbedding, EmbeddingIndex } from './client-vector-search.mjs';
 import { env } from '@xenova/transformers';
 import { gsap } from 'gsap';
 import SplitType from 'split-type';
@@ -50,7 +50,81 @@ import {
 import { ScoreManager } from './score-manager.mjs';
 
 
+// Configure transformers.js for local model loading
 env.localModelPath = './site-data/cache';
+env.allowRemoteModels = false;
+env.useBrowserCache = false;
+env.remoteURL = null;
+env.remotePath = null;
+
+// Force local loading of all files
+env.useLocalModels = true;
+env.useRemoteModels = false;
+
+// Configure ONNX WASM paths to use local files
+env.backends = env.backends || {};
+env.backends.onnx = env.backends.onnx || {};
+env.backends.onnx.wasm = env.backends.onnx.wasm || {};
+env.backends.onnx.wasm.wasmPaths = './site-data/cache/';
+
+// Disable CDN loading
+env.useCDN = false;
+env.cdnURL = null;
+
+// Additional transformers.js configuration
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.useCustomCache = false;
+env.useBrowserCache = false;
+env.remoteURL = null;
+env.remotePath = null;
+env.localModelPath = './site-data/cache';
+
+// Custom fetch to redirect all model requests to local files
+env.customFetch = async (url, options) => {
+  console.log('Custom fetch intercepted:', url);
+  
+  // If it's a Hugging Face Hub URL, redirect to local
+  if (url.includes('huggingface.co') || url.includes('hf.co')) {
+    const modelName = url.split('/').slice(-2).join('/');
+    const localUrl = `http://localhost:1234/site-data/cache/${modelName}`;
+    console.log('Redirecting to local:', localUrl);
+    return fetch(localUrl, options);
+  }
+  
+  // If it's a relative path, make it absolute
+  if (url.startsWith('./') || url.startsWith('../')) {
+    const absoluteUrl = `http://localhost:1234/${url}`;
+    console.log('Making absolute:', absoluteUrl);
+    return fetch(absoluteUrl, options);
+  }
+  
+  return fetch(url, options);
+};
+
+console.log('Transformers.js configuration:');
+console.log('  localModelPath:', env.localModelPath);
+console.log('  allowRemoteModels:', env.allowRemoteModels);
+console.log('  useBrowserCache:', env.useBrowserCache);
+console.log('  wasmPaths:', env.backends.onnx.wasm.wasmPaths);
+
+// Debug: Monitor fetch requests to see what URLs are being requested
+const originalFetch = window.fetch;
+window.fetch = function(url, options) {
+  console.log('Fetch request to:', url);
+  if (url.includes('site-data') || url.includes('cache')) {
+    console.log('Model file request detected:', url);
+  }
+  if (url.includes('TaylorAI') || url.includes('bge-micro')) {
+    console.log('BGE model file request:', url);
+  }
+  return originalFetch.call(this, url, options).then(response => {
+    if (url.includes('TaylorAI') || url.includes('bge-micro')) {
+      console.log('BGE model file response:', url, response.status, response.headers.get('content-type'));
+    }
+    return response;
+  });
+};
 
 let index;
 let data = [];
@@ -271,8 +345,19 @@ function getDiscoveredMetadataCounts() {
 
 function filterResults(results, selectedText) {
   // should we also filter for substring mention being same?
+  console.log('Filtering', results.length, 'results for text:', selectedText);
+  console.log('Current result book:', currentResult ? currentResult['book'] : 'none');
+  console.log('Already seen count:', alreadySeen.length);
+  
   let chosen = null;
-  for (const result of results) {
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    console.log(`Checking result ${i}:`, {
+      text: result['object']['text'].substring(0, 50) + '...',
+      book: result['object']['book'],
+      similarity: result['similarity']
+    });
+    
     // go down and filter out same text and same book to reduce redundancy
     if (result['object']['text'] !== selectedText 
       && result['object']['book'] !== currentResult['book']
@@ -282,6 +367,13 @@ function filterResults(results, selectedText) {
       chosen = result;
       console.log("chosen", chosen);
       break;
+    } else {
+      console.log(`Result ${i} filtered out:`, {
+        sameText: result['object']['text'] === selectedText,
+        sameBook: result['object']['book'] === currentResult['book'],
+        alreadySeen: alreadySeen.includes(result['object']),
+        sameCurrentText: result['object']['text'] === currentResult['text']
+      });
     }
   }
   return chosen;
@@ -293,42 +385,51 @@ async function findRelatedText(selectedText) {
     console.error('Index not initialized');
     return null;
   }
-  const queryEmbedding = await getEmbedding(selectedText.toLowerCase()); // Query embedding
-  const results = await index.search(queryEmbedding, { topK: 10 });
-  console.log('results of search', results);
-
-  const chosen = filterResults(results, selectedText);
-  currentResult = chosen['object'];
-  currentResult['similarity'] = chosen['similarity'];
   
-  // Add categories to currentResult so they're available during animation
-  const text = chosen['object']['text'];
-  const selectedCategories = getCategory(selectedText);
-  const foundCategories = getCategory(text);
-  currentResult['selectedCategories'] = selectedCategories;
-  currentResult['foundCategories'] = foundCategories;
-  alreadySeen.push(chosen['object']);
+  try {
+    console.log('Getting embedding for text:', selectedText.toLowerCase());
+    
+    // Add timeout to prevent hanging
+    const embeddingPromise = getEmbedding(selectedText.toLowerCase());
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Embedding timeout after 10 seconds')), 10000)
+    );
+    
+    const queryEmbedding = await Promise.race([embeddingPromise, timeoutPromise]);
+    console.log('Embedding obtained successfully, length:', queryEmbedding.length);
+    console.log('Searching index...');
+    const results = await index.search(queryEmbedding, { topK: 10 });
+    console.log('results of search', results);
+    console.log('Number of search results:', results.length);
 
-  const book_id = chosen['object']['book'];
-  const score = chosen['similarity'];
-
-  const author = chosen['object']['author'];
-  const title = chosen['object']['title'];
-  const story_title = chosen['object']['storytitle'];
-  const birth = chosen['object']['birth'];
-
-  console.log('Selected text categories:', selectedCategories);
-  console.log('Found text categories:', foundCategories);
-
-  return { text: text, 
-    id: book_id, 
-    author: author, 
-    title: title, 
-    birth: birth, 
-    story_title: story_title,
-    score: score,
-    selectedCategories: currentResult['selectedCategories'],
-    foundCategories: currentResult['foundCategories'] };
+    console.log('Filtering results...');
+    const chosen = filterResults(results, selectedText);
+    console.log('Chosen result after filtering:', chosen);
+    
+    if (!chosen) {
+      console.error('No suitable result found after filtering');
+      return null;
+    }
+    
+    currentResult = chosen['object'];
+    currentResult['similarity'] = chosen['similarity'];
+    
+    // Add categories to currentResult so they're available during animation
+    const text = chosen['object']['text'];
+    const selectedCategories = getCategory(selectedText);
+    const foundCategories = getCategory(text);
+    currentResult['selectedCategories'] = selectedCategories;
+    currentResult['foundCategories'] = foundCategories;
+    alreadySeen.push(chosen['object']);
+    console.log('currentResult', currentResult);
+    return currentResult;
+  } catch (error) {
+    console.error('Error in findRelatedText - details:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    throw error;
+  }
 }
 
 
@@ -1070,9 +1171,45 @@ async function initialize() {
       // Clear any existing text selection on initialization
       clearTextSelection();
 
-      await initializeModel("TaylorAI/bge-micro");
+      console.log('Initializing model...');
+      console.log('Model path should be:', env.localModelPath);
+      try {
+        console.log('Calling initializeModel with: TaylorAI/bge-micro');
+        console.log('Current env settings:', {
+          localModelPath: env.localModelPath,
+          allowRemoteModels: env.allowRemoteModels,
+          allowLocalModels: env.allowLocalModels
+        });
+        await initializeModel("TaylorAI/bge-micro");
+        console.log('Model initialized successfully');
+      } catch (error) {
+        console.error('Model initialization failed:', error);
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Full error:', error);
+        throw error;
+      }
+      
+      console.log('Loading data files...');
       await loadFiles();
+      console.log('Data files loaded successfully');
+      
+      console.log('Creating search index...');
       index = await createIndex();
+      console.log('Search index created successfully');
+      
+      // Force model loading by testing embedding
+      console.log('Testing embedding to force model loading...');
+      try {
+        console.log('About to call getEmbedding...');
+        const testEmbedding = await getEmbedding("test");
+        console.log('Model loading test successful, embedding length:', testEmbedding.length);
+      } catch (error) {
+        console.error('Model loading test failed:', error);
+        console.error('Error details:', error.name, error.message);
+        console.error('Error stack:', error.stack);
+        // Don't throw here, let the app continue
+      }
 
       scoreManager = new ScoreManager({
         categories,
