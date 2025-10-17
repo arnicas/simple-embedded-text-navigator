@@ -1,6 +1,16 @@
 // UI Module - Handles all DOM manipulation and UI component creation
 import { gsap } from 'gsap';
-import { formattedContent, animatePhrasesToBuckets, setGlobalCategoryData, getGlobalCategoryCount, getGlobalCategoryScore, cleanupTextContent } from './effects.mjs';
+import {
+  formattedContent,
+  animatePhrasesToBuckets,
+  setGlobalCategoryData,
+  getGlobalCategoryCount,
+  getGlobalCategoryScore,
+  cleanupTextContent,
+  enhancedWordAnimation,
+  buildTextWithWords,
+  randomY
+} from './effects.mjs';
 
 // Module-scoped variables to store references passed during initialization
 let scoreManager;
@@ -627,7 +637,7 @@ export function showTotalModal(imageSrc) {
           <span style="font-weight: bold; color: #2d1810;">${Math.round(nonYoursPoints)}</span>
         </div>
         <div style="display: flex; justify-content: space-between; margin: 5px 0; padding: 6px 8px; background: rgba(255,255,255,0.2); border-radius: 4px;">
-          <span style="font-size: 13px; color: #555;">• Yours Items:</span>
+          <span style="font-size: 13px; color: #555;">• Your Items:</span>
           <span style="font-weight: bold; color: #2d1810;">${Math.round(yoursPoints)}</span>
         </div>
       </div>
@@ -1023,38 +1033,74 @@ export function updateCategoryBuckets(selectedCategories, foundCategories) {
 }
 
 export function animateTextChange(element, selectedText, newText, currentResult) {
-  // For now, use a simple, reliable text change to ensure proper rendering
-  // We'll add the smooth animations back once the basic functionality works
-  
-  if (currentResult && currentResult.similarity > 0.8) {
-    console.log('high score - using simple text change for now');
-    
-    // For high scores, we still want to preserve word spans for highlighting
-    // Use buildTextWithWords instead of formattedContent to maintain structure
+  const score = currentResult?.similarity || 0;
+
+  if (score > 0.75) {
+    console.log('high score - using simple text change with word animation');
+
+    // Even for high scores, use a gentle animation to make text changes visible
+    // Build word structure for animation
     const wordContent = buildTextWithWords(newText);
     element.innerHTML = wordContent;
-    
-    // Apply highlights after text change
-    applyHighlightsToText(element, newText, currentResult);
-    
+
+    // Get all word elements
+    const words = element.querySelectorAll('.word');
+
+    // Set initial state - slightly faded and offset
+    words.forEach(word => {
+      word.style.opacity = '0';
+      word.style.transform = 'translateY(10px)';
+    });
+
+    // Animate in with a quick stagger
+    gsap.to(words, {
+      opacity: 1,
+      y: 0,
+      duration: 0.3,
+      ease: "power2.out",
+      stagger: 0.02,
+      onComplete: () => {
+        // Clean up transforms
+        words.forEach(word => {
+          word.style.transform = '';
+          word.style.opacity = '';
+        });
+        // Apply highlights after animation
+        applyHighlightsToText(element, newText, currentResult);
+      }
+    });
+
   } else {
-    //console.log('low score - using enhanced word animation');
-    
+    console.log('low score - using enhanced word animation');
+
     try {
       // Use enhanced word animation for low scores
-      // This would need to be imported from effects.mjs
-      console.log('Enhanced word animation not yet implemented in UI module');
-      // Fallback: use word structure instead of plain text
-      const wordContent = buildTextWithWords(newText);
-      element.innerHTML = wordContent;
-      // Apply highlights after fallback
-      applyHighlightsToText(element, newText, currentResult);
+      enhancedWordAnimation(element, selectedText, newText, {
+        duration: 0.5,
+        stagger: 0.05,
+        ease: "power4.out",
+        onStart: () => {
+          console.log('Starting enhanced word animation');
+        },
+        onComplete: () => {
+          console.log('Enhanced word animation completed');
+
+          // Small delay to ensure animation is completely finished
+          gsap.delayedCall(0.05, () => {
+            console.log('Starting highlights after animation completion delay');
+            applyHighlightsToText(element, newText, currentResult);
+          });
+        }
+      }).catch(error => {
+        console.error('Enhanced word animation failed, using fallback:', error);
+        const wordContent = buildTextWithWords(newText);
+        element.innerHTML = wordContent;
+        applyHighlightsToText(element, newText, currentResult);
+      });
     } catch (error) {
-      console.error('Enhanced word animation failed, using fallback:', error);
-      // Fallback: use word structure instead of plain text
+      console.error('Enhanced word animation error, using fallback:', error);
       const wordContent = buildTextWithWords(newText);
       element.innerHTML = wordContent;
-      // Apply highlights after fallback
       applyHighlightsToText(element, newText, currentResult);
     }
   }

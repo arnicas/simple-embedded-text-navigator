@@ -415,7 +415,7 @@ export function animatePhrasesToBuckets(highlights, onComplete) {
 
 export function updateBackgroundForScore(score) {
   // Map the actual score range (0.6 to 0.99) to the full color spectrum (0 to 1)
-  const minScore = 0.65;
+  const minScore = 0.66;
   const maxScore = 0.9;
 
   // Clamp score to the expected range

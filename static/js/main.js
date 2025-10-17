@@ -21,8 +21,6 @@ import {
   setGlobalCategoryData,
   clearTextSelection,
   smoothTextTransition,
-  enhancedWordAnimation,
-  buildTextWithWords,
   integrateWithScoreCelebration,
   initializeCategoryImages
 } from './effects.mjs';
@@ -40,12 +38,10 @@ import {
   showMetadataModal,
   showTotalModal,
   saveYoursChanges,
-  highlightPhrasesInText,
   activateCategoryBuckets,
   updateCategoryBuckets,
   animateTextChange,
-  applyHighlightsToText,
-  fadeHighlightsToBackground
+  applyHighlightsToText
 } from './ui.mjs';
 import { ScoreManager } from './score-manager.mjs';
 
@@ -437,95 +433,7 @@ function recalculateYoursCategory() {
   scoreManager.recalculateYoursCategory();
 }
 
-function highlightPhrasesInText(text, categories) {
-  console.log('highlightPhrasesInText called with text:', text.substring(0, 100) + '...');
-  console.log('Categories to process:', categories);
-  
-  // Collect all potential matches with their positions first
-  const potentialMatches = [];
-  
-  categories.forEach(match => {
-    console.log(`Processing category: ${match.category} with phrases:`, match.phrases);
-    // The `phrases` property is now an object of counts, e.g., { "sun": 2 }. We need to iterate over its keys.
-    Object.keys(match.phrases).forEach(phrase => {
-      const escapedWord = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      
-      // This regex uses a word boundary to find the start of the word,
-      // captures the word itself, and then matches any trailing non-alphabetic characters.
-      // This ensures we highlight "sun," or "water." correctly.
-      const regex = new RegExp(`\\b(${escapedWord})[^a-zA-Z]*`, 'gi');
-      
-      let regexMatch;
-      while ((regexMatch = regex.exec(text)) !== null) {
-        // The full match (e.g., "sun,") is in regexMatch[0].
-        const fullMatch = regexMatch[0];
-        const startPos = regexMatch.index;
-        const endPos = startPos + fullMatch.length;
-        
-        potentialMatches.push({
-          start: startPos,
-          end: endPos,
-          phrase: fullMatch, // Highlight the full match, including punctuation
-          category: match.category
-        });
-        console.log(`Found potential match: "${fullMatch}" at ${startPos}-${endPos} for category ${match.category}`);
-      }
-    });
-  });
-  
-  // Sort matches by start position and resolve conflicts (longest match wins)
-  potentialMatches.sort((a, b) => a.start - b.start);
-  const finalMatches = [];
-  
-  potentialMatches.forEach(current => {
-    // Check if this match conflicts with any already accepted match
-    const hasConflict = finalMatches.some(accepted => 
-      (current.start < accepted.end && current.end > accepted.start)
-    );
-    
-    if (!hasConflict) {
-      finalMatches.push(current);
-    } else {
-      console.log(`Skipping conflicting match: "${current.phrase}" (${current.start}-${current.end})`);
-    }
-  });
-  
-  console.log(`Resolved ${potentialMatches.length} potential matches to ${finalMatches.length} final matches`);
-  
-  // Build the final HTML string properly by working with original positions
-  let highlightedText = '';
-  let lastEnd = 0;
-  const highlights = [];
-  
-  // Sort matches in forward order for building
-  finalMatches.sort((a, b) => a.start - b.start);
-  
-  finalMatches.forEach((match, index) => {
-    const highlightId = `highlight-${match.category}-${index}`;
-    highlights.push({
-      id: highlightId,
-      phrase: match.phrase,
-      category: match.category
-    });
-    
-    // Add text before this match
-    highlightedText += text.substring(lastEnd, match.start);
-    
-    // Add the highlighted phrase
-    highlightedText += `<span class="phrase-highlight active" id="${highlightId}" data-category="${match.category}">${match.phrase}</span>`;
-    
-    lastEnd = match.end;
-  });
-  
-  // Add remaining text after last match
-  highlightedText += text.substring(lastEnd);
-  
-  console.log(`Total highlights applied: ${highlights.length}`);
-  console.log('Final highlighted text:', highlightedText);
-  return { highlightedText, highlights };
-}
-
-// animatePhrasesToBuckets function is now imported from effects.js
+// Note: highlightPhrasesInText is imported from ui.mjs and used in the highlighting system
 
 function initializeGlobalCounts() {
   if (!scoreManager) {
@@ -776,139 +684,8 @@ function resetHighlight(element, selectedText) {
   }
 }
 
-function animateTextChange(element, selectedText, newText) {
-  // Remove the highlight from the selected text
-  resetHighlight(element, selectedText);
-
-  const score = currentResult['similarity'];
-
-  //console.log('similarity score', score, currentResult);
-  
-  // For now, use a simple, reliable text change to ensure proper rendering
-  // We'll add the smooth animations back once the basic functionality works
-  
-  if (score > 0.8) {
-    console.log('high score - using simple text change for now');
-    
-    // For high scores, we still want to preserve word spans for highlighting
-    // Use buildTextWithWords instead of formattedContent to maintain structure
-    const wordContent = buildTextWithWords(newText);
-    element.innerHTML = wordContent;
-    
-    // Apply highlights after text change
-    applyHighlightsToText(element, newText);
-    
-    // No score celebration for similarity scores - only for category discoveries
-    
-  } else {
-    //console.log('low score - using enhanced word animation');
-    
-    try {
-      // Use enhanced word animation for low scores
-      enhancedWordAnimation(element, selectedText, newText, {
-        duration: 0.5, // Reduced from 1.0 to 0.5 seconds
-        stagger: 0.05, // Reduced from 0.1 to 0.05 seconds
-        ease: "power4.out",
-        onStart: () => {
-          console.log('Starting enhanced word animation');
-        },
-        onComplete: () => {
-          console.log('Enhanced word animation completed');
-          
-          // Add a small delay to ensure animation is completely finished
-          // This prevents race conditions with highlighting
-          gsap.delayedCall(0.05, () => {
-            console.log('Starting highlights after animation completion delay');
-            // Apply highlights after animation completes
-            applyHighlightsToText(element, newText);
-            // No score celebration for similarity scores - only for category discoveries
-          });
-        }
-      }).catch(error => {
-        console.error('Enhanced word animation failed, using fallback:', error);
-        // Fallback: use word structure instead of plain text
-        const wordContent = buildTextWithWords(newText);
-        element.innerHTML = wordContent;
-        // Apply highlights after fallback
-        applyHighlightsToText(element, newText);
-      });
-    } catch (error) {
-      console.error('Enhanced word animation error, using fallback:', error);
-      // Fallback: use word structure instead of plain text
-      const wordContent = buildTextWithWords(newText);
-      element.innerHTML = wordContent;
-      // Apply highlights after fallback
-      applyHighlightsToText(element, newText);
-    }
-  }
-}
-
-// Helper function to apply highlights to text
-function applyHighlightsToText(element, text) {
-  // Guard against multiple calls - if highlights are already being processed, skip
-  if (element.dataset.highlightsProcessing === 'true') {
-    console.log('Highlights already being processed, skipping duplicate call');
-    return;
-  }
-  
-  // Check if we have found categories to highlight
-  if (currentResult && currentResult.foundCategories && currentResult.foundCategories.length > 0) {
-    console.log('Applying highlights with new, robust method for categories:', currentResult.foundCategories);
-    
-    // Mark that we're processing highlights
-    element.dataset.highlightsProcessing = 'true';
-    
-    // The animation system may have already split text into word/char spans.
-    // For robust highlighting, we work on a clean HTML string first, then set it.
-    const originalText = element.textContent || element.innerText;
-    
-    const { highlightedText, highlights } = highlightPhrasesInText(originalText, currentResult.foundCategories);
-    
-    // Replace the element's content with the newly highlighted HTML.
-    // This is much more reliable than trying to manipulate the live DOM tree.
-    element.innerHTML = highlightedText;
-
-    console.log('Highlights applied to text using pre-built HTML.');
-    
-    // Schedule the highlights to fade to background-only after a delay
-    gsap.delayedCall(2.0, () => {
-      fadeHighlightsToBackground();
-      // Clear the processing flag after fade completes
-      element.dataset.highlightsProcessing = 'false';
-    });
-    
-  } else {
-    console.log('No found categories to highlight');
-    // Clear the processing flag if no highlights
-    element.dataset.highlightsProcessing = 'false';
-  }
-}
-
-
-// Function to fade highlights to background-only styling (no layout shift)
-function fadeHighlightsToBackground() {
-  const activeHighlights = document.querySelectorAll('.phrase-highlight.active');
-  
-  console.log(`Found ${activeHighlights.length} active highlights to fade`);
-  
-  if (activeHighlights.length > 0) {
-    console.log(`Fading ${activeHighlights.length} highlights to subtle background`);
-    
-    // Simple approach: change the class and let CSS handle the transition
-    // This avoids conflicts between GSAP and CSS
-    activeHighlights.forEach(highlight => {
-      highlight.classList.remove('active');
-      highlight.classList.add('faded');
-    });
-    
-    console.log('Highlights faded to subtle background - using CSS transitions');
-  } else {
-    console.log('No active highlights found to fade');
-  }
-}
-
-
-// updateBackgroundForScore function is now imported from effects.js
+// Note: animateTextChange, applyHighlightsToText, and fadeHighlightsToBackground
+// are all imported from ui.mjs and used below
 
 function replaceRelatedInfo(relatedItemObject) {
   console.log('[Debug] replaceRelatedInfo invoked', {
