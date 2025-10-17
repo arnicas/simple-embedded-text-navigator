@@ -49,8 +49,14 @@ import {
 } from './ui.mjs';
 import { ScoreManager } from './score-manager.mjs';
 
+// Configure transformers.js for remote model loading from Hugging Face CDN
+// The key issue: prevent trying to load from relative paths that resolve to dev server
 
-env.localModelPath = './site-data/cache';
+// CRITICAL: Set localModelPath to empty string to avoid relative path resolution
+env.localModelPath = '';  // Empty string prevents "/models/..." paths
+env.allowLocalModels = false;  // Disable local models entirely
+env.allowRemoteModels = true;  // Enable remote from Hugging Face CDN
+env.useBrowserCache = true;    // Cache downloaded models in browser
 
 let index;
 let data = [];
@@ -1070,7 +1076,34 @@ async function initialize() {
       // Clear any existing text selection on initialization
       clearTextSelection();
 
-      await initializeModel("TaylorAI/bge-micro");
+      console.log('Starting model initialization...');
+      console.log('Transformers.js env config:', {
+        allowRemoteModels: env.allowRemoteModels,
+        allowLocalModels: env.allowLocalModels,
+        useBrowserCache: env.useBrowserCache,
+        remoteHost: env.remoteHost,
+        remotePathTemplate: env.remotePathTemplate,
+        localModelPath: env.localModelPath
+      });
+
+      // Intercept fetch to see what URLs are being requested
+      const originalFetch = window.fetch;
+      window.fetch = function(...args) {
+        console.log('Fetch request:', args[0]);
+        return originalFetch.apply(this, args);
+      };
+
+      try {
+        await initializeModel("TaylorAI/bge-micro");
+        console.log('Model initialized successfully');
+      } catch (modelError) {
+        console.error('Model initialization error:', modelError);
+        console.error('Error details:', {
+          message: modelError.message,
+          stack: modelError.stack
+        });
+        throw modelError; // Re-throw to be caught by outer try-catch
+      }
       await loadFiles();
       index = await createIndex();
 
