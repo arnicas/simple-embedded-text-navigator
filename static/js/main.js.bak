@@ -505,7 +505,176 @@ function reorderCategoryBuckets() {
 
 // performBucketReorder function is now imported from effects.js
 
-// activateCategoryBuckets and updateCategoryBuckets are imported from ui.mjs - removed duplicate definitions
+function activateCategoryBuckets(selectedCategories, foundCategories) {
+  // Activate buckets for selected text categories
+  selectedCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      bucket.classList.add('active');
+    }
+  });
+  
+  // Activate buckets for found text categories
+  foundCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      bucket.classList.add('active');
+    }
+  });
+}
+
+function updateCategoryBuckets(selectedCategories, foundCategories) {
+  // Reset all buckets to inactive
+  const allBuckets = document.querySelectorAll('.categoryBucket');
+  allBuckets.forEach(bucket => {
+    bucket.classList.remove('active', 'receiving');
+    bucket.title = ''; // Clear tooltip
+  });
+  
+  // Don't increment counters yet - wait until animations complete
+  
+  // Set tooltips but don't activate buckets yet (wait for animation to complete)
+  selectedCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      bucket.title = `Selected: ${Object.keys(match.phrases).join(', ')}`;
+    }
+  });
+  
+  // Set tooltips for found text categories but don't activate yet
+  foundCategories.forEach(match => {
+    const bucket = document.getElementById(`bucket-${match.category}`);
+    if (bucket) {
+      // Add to existing tooltip or create new one
+      const phraseString = Object.keys(match.phrases).join(', ');
+      const existingTitle = bucket.title;
+      if (existingTitle) {
+        bucket.title = `${existingTitle} | Found: ${phraseString}`;
+      } else {
+        bucket.title = `Found: ${phraseString}`;
+      }
+    }
+  });
+  
+  // Debug logging
+  console.log('updateCategoryBuckets called with selectedCategories:', selectedCategories, 'foundCategories:', foundCategories);
+  
+  // Check if we have any matches at all
+  const hasAnyMatches = selectedCategories.length > 0 || foundCategories.length > 0;
+  
+  // Trigger word-to-bucket animation for found categories after main text animation completes
+  if (foundCategories.length > 0) {
+    console.log('Found categories exist, setting up animation');
+    
+    // Store categories for use in animation callback
+    const categoriesForCallback = { selectedCategories, foundCategories };
+    
+    // Process scoring and celebrations immediately based on found categories
+    if (foundCategories.length > 0) {
+      gsap.delayedCall(2.5, () => {  // Wait for text animation to mostly complete
+        //console.log('Processing category scoring for:', foundCategories);
+        
+        // Process any pending metadata celebrations after word celebrations complete
+        calculateAndCelebrateMetadataScore();
+        
+        // Clean up any remaining HTML markup after a delay
+        gsap.delayedCall(2, () => {
+          cleanupTextContent();
+          
+          // Reorder buckets based on updated counts
+          gsap.delayedCall(0.5, () => {
+            reorderCategoryBuckets();
+          });
+        });
+      });
+    }
+    
+    gsap.delayedCall(2, () => {  // Wait for main text animation to complete, then start phrase animations
+      // Debug: Check what's actually in the DOM
+      console.log('All spans in DOM:', Array.from(document.querySelectorAll('span')).map(s => ({
+        id: s.id,
+        classes: s.className,
+        text: s.textContent,
+        category: s.getAttribute('data-category')
+      })));
+      console.log('Phrase highlights in DOM:', document.querySelectorAll('.phrase-highlight').length);
+      
+      // Find existing highlights that were added during initial text setup
+      const highlights = [];
+      const processedGroups = new Set();
+      
+      document.querySelectorAll('.phrase-highlight').forEach((element, index) => {
+        const phraseGroup = element.getAttribute('data-phrase-group') || element.id;
+        
+        // Skip if we've already processed this phrase group
+        if (processedGroups.has(phraseGroup)) return;
+        
+        // Find all elements in this phrase group
+        const groupElements = Array.from(document.querySelectorAll(`[data-phrase-group="${phraseGroup}"]`));
+        if (groupElements.length === 0) {
+          // Single word highlight (no phrase group)
+          groupElements.push(element);
+        }
+        
+        // Combine text content for the phrase
+        const phraseText = groupElements.map(el => el.textContent).join(' ');
+        
+        highlights.push({
+          id: groupElements[0].id, // Use the first element's ID for animation
+          phrase: phraseText,
+          category: element.getAttribute('data-category')
+        });
+        
+        processedGroups.add(phraseGroup);
+      });
+      
+      console.log('Found existing highlights for animation:', highlights);
+      console.log('DOM elements for highlights:', highlights.map(h => ({
+        id: h.id,
+        element: document.getElementById(h.id),
+        exists: !!document.getElementById(h.id)
+      })));
+      
+      if (highlights.length > 0) {
+        // Start phrase animations directly since highlights are already in place
+        gsap.delayedCall(0.3, () => {
+          console.log('Starting phrase animation');
+          animatePhrasesToBuckets(highlights, () => {
+            // This callback now only handles things that MUST happen after the animation.
+            console.log('Animation complete, activating buckets and cleaning up');
+            activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
+            cleanupTextContent();
+          }); // animatePhrasesToBuckets callback
+        }); // gsap.delayedCall callback
+      } else {
+        // No highlights found, but we still need to run post-animation logic
+        console.log('No highlights found to animate, but running cleanup and celebrations.');
+        // Fallback to ensure text is visible and celebrations happen
+        cleanupTextContent();
+        activateCategoryBuckets(categoriesForCallback.selectedCategories, categoriesForCallback.foundCategories);
+      }
+    });
+
+    // Score celebrations should be triggered regardless of whether the animation runs.
+    gsap.delayedCall(2.5, () => {
+      triggerPendingCategoryCelebration();
+      calculateAndCelebrateMetadataScore();
+    });
+
+  } 
+  
+  // Ensure buckets are properly reset if no matches at all
+  if (!hasAnyMatches) {
+    console.log('No matches found at all, ensuring all buckets remain inactive');
+    gsap.delayedCall(2, () => {
+      const allBuckets = document.querySelectorAll('.categoryBucket');
+      allBuckets.forEach(bucket => {
+        bucket.classList.remove('active', 'receiving');
+        bucket.title = ''; // Clear any lingering tooltips
+      });
+    });
+  }
+}
 
 function resetHighlight(element, selectedText) {
   const highlightSpan = element.querySelector('.highlight');

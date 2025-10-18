@@ -1,5 +1,6 @@
 :root {
     --score-bg-color: #f0f0f0; /* Default background color */
+    --score-bg-gradient: radial-gradient(ellipse at center 30%, #fefced 0%, #fefced 15%, #f0f0f0 50%); /* Default gradient with manuscript center */
 }
 
 /* ===== ANIMATION UTILITY CLASSES ===== */
@@ -87,8 +88,8 @@ body {
     margin: auto;
     margin: 0;
     padding: 0;
-    background-color: var(--score-bg-color);
-    transition: background-color 1s ease-in-out;
+    background: var(--score-bg-gradient);
+    transition: background 1s ease-in-out;
 }
 
 #container {
@@ -281,13 +282,19 @@ body {
 }
 
 .metadataBucket img {
-    width: clamp(60px, 6vw, 90px);
-    height: clamp(60px, 6vw, 90px);
+    width: clamp(50px, 6vw, 90px);
+    height: clamp(50px, 6vw, 90px);
     object-fit: cover;
     border-radius: clamp(8px, 1vw, 15px);
     margin-bottom: clamp(6px, 0.8vw, 10px);
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(139, 69, 19, 0.15);
     transition: all 0.3s ease;
+}
+
+.metadataBucket:hover img {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25), 0 2px 3px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
 .metadataLabel {
@@ -386,8 +393,14 @@ body {
     object-fit: cover;
     border-radius: clamp(6px, 0.8vw, 12px);
     margin-bottom: clamp(4px, 0.6vw, 8px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(139, 69, 19, 0.15);
     transition: all 0.3s ease;
+}
+
+.categoryBucket:hover img {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25), 0 2px 3px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
 }
 
 .categoryLabel {

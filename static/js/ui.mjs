@@ -1185,10 +1185,7 @@ export function fadeHighlightsToBackground() {
   }
 }
 
-function buildTextWithWords(text) {
-  const words = text.split(' ');
-  return words.map(word => `<span class="word">${word}</span>`).join(' ');
-}
+// buildTextWithWords is imported from effects.mjs - removed duplicate definition
 
 function buildTextWithHighlights(text, highlights = []) {
   // For now, just return the text as-is to avoid dependency issues

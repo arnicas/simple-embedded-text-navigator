@@ -432,12 +432,19 @@ export function updateBackgroundForScore(score) {
   const greenComponent = Math.floor(216 - (216 - 200) * normalizedScore); // 216 -> 200 (less green for higher scores)
   const blueComponent = Math.floor(232 - (232 - 220) * normalizedScore);  // 232 -> 220 (less blue for higher scores)
 
-  const backgroundColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
+  const edgeColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
 
-  //console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Color: ${backgroundColor}`);
+  // Manuscript color for center (same as textContainer:after background)
+  const manuscriptColor = '#fefced';
 
-  // Update the CSS variable
-  document.documentElement.style.setProperty('--score-bg-color', backgroundColor);
+  // Create radial gradient with manuscript color in center, transitioning to score color at edges
+  const backgroundGradient = `radial-gradient(ellipse at center 30%, ${manuscriptColor} 0%, ${manuscriptColor} 15%, ${edgeColor} 50%)`;
+
+  //console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Edge Color: ${edgeColor}`);
+
+  // Update both CSS variables for backward compatibility
+  document.documentElement.style.setProperty('--score-bg-color', edgeColor);
+  document.documentElement.style.setProperty('--score-bg-gradient', backgroundGradient);
 }
 
 export function cleanupTextContent() {
