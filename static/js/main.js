@@ -824,6 +824,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         let isProcessingSelection = false;
         let lastProcessedSelection = '';
         let successfulSelections = 0; // Track successful selections
+        let capturedRange = null; // Store range immediately when selection changes
+        let capturedText = '';
 
         async function handleSelection() {
             // Prevent processing if already busy
@@ -846,9 +848,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // Get the current selection
-            const selection = window.getSelection();
-            const selectedText = selection.toString().trim();
+            // Use the captured text and range instead of getting fresh selection
+            const selectedText = capturedText;
+            const range = capturedRange;
 
             // Basic validation
             if (selectedText.length < 4) {
@@ -868,9 +870,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             lastProcessedSelection = selectedText;
 
             try {
-                // Capture the range BEFORE clearing the selection
-                const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-
                 // Clear the selection after a longer delay to allow users to see their selection
                 setTimeout(() => {
                     clearTextSelection();
@@ -916,6 +915,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             } finally {
                 // Always reset the processing flag
                 isProcessingSelection = false;
+                // Clear captured data
+                capturedRange = null;
+                capturedText = '';
                 console.log('Selection processing unlocked');
             }
         }
@@ -924,6 +926,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         function isMobile() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                 (window.innerWidth <= 768 && window.innerHeight <= 1024);
+        }
+
+        // Helper function to check if a range overlaps with the text element
+        function isRangeInTextElement(range) {
+            if (!range) return false;
+
+            const startNode = range.startContainer;
+            const endNode = range.endContainer;
+
+            // Check if either the start or end is within the text element
+            // This handles edge cases where selection extends slightly beyond boundaries
+            const startInElement = textElement.contains(startNode) || textElement === startNode;
+            const endInElement = textElement.contains(endNode) || textElement === endNode;
+            const ancestorInElement = textElement.contains(range.commonAncestorContainer);
+
+            return startInElement || endInElement || ancestorInElement;
         }
 
         if (isMobile()) {
@@ -938,6 +956,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     if (selectedText.length >= 4) {
                         console.log('Mobile touch selection detected:', selectedText.substring(0, 30) + '...');
+                        // Capture range and text immediately
+                        capturedText = selectedText;
+                        capturedRange = selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
                         await handleSelection();
                     }
                 }, 400); // Increased delay for mobile touch selection
@@ -947,6 +968,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             let mobileSelectionTimeout = null;
 
             document.addEventListener('selectionchange', () => {
+                // Capture selection data immediately, synchronously
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+                const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
                 // Clear any pending timeout
                 if (mobileSelectionTimeout) {
                     clearTimeout(mobileSelectionTimeout);
@@ -954,13 +980,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Set a new timeout to process the selection
                 mobileSelectionTimeout = setTimeout(async () => {
-                    const selection = window.getSelection();
-                    const selectedText = selection.toString().trim();
-
                     if (selectedText.length >= 4 && !isProcessingSelection) {
-                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                        if (range && textElement.contains(range.commonAncestorContainer)) {
+                        if (range && isRangeInTextElement(range)) {
                             console.log('Mobile selection change detected:', selectedText.substring(0, 30) + '...');
+                            // Capture the selection data
+                            capturedText = selectedText;
+                            capturedRange = range.cloneRange();
                             await handleSelection();
                         }
                     }
@@ -974,24 +999,83 @@ document.addEventListener('DOMContentLoaded', async () => {
             let selectionTimeout = null;
 
             document.addEventListener('selectionchange', () => {
+                // Capture selection data immediately, synchronously, before any timeout
+                const selection = window.getSelection();
+                const selectedText = selection.toString().trim();
+                const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+                console.log('[Selection Debug] selectionchange event:', {
+                    textLength: selectedText.length,
+                    hasRange: !!range,
+                    isProcessing: isProcessingSelection,
+                    text: selectedText.substring(0, 50)
+                });
+
                 // Clear any pending timeout
                 if (selectionTimeout) {
                     clearTimeout(selectionTimeout);
                 }
 
+                // Early validation - skip if too short or no range
+                if (selectedText.length < 4 || !range) {
+                    console.log('[Selection Debug] Skipping - too short or no range');
+                    return;
+                }
+
+                // Check if range is in text element
+                const inTextElement = isRangeInTextElement(range);
+                console.log('[Selection Debug] Range in text element:', inTextElement);
+
+                if (!inTextElement) {
+                    console.log('[Selection Debug] Skipping - range not in text element');
+                    return;
+                }
+
+                // Capture the selection data NOW, before the timeout
+                const clonedRange = range.cloneRange();
+                const capturedSelectionText = selectedText;
+
+                console.log('[Selection Debug] Capturing selection and setting timeout');
+
                 // Set a new timeout to process the selection
                 selectionTimeout = setTimeout(async () => {
+                    if (!isProcessingSelection) {
+                        console.log('[Selection Debug] Timeout fired - processing selection:', capturedSelectionText.substring(0, 30) + '...');
+                        // Use the captured data from when the event fired
+                        capturedText = capturedSelectionText;
+                        capturedRange = clonedRange;
+                        await handleSelection();
+                    } else {
+                        console.log('[Selection Debug] Timeout fired but already processing - skipping');
+                    }
+                }, 300); // Reduced delay for better responsiveness
+            });
+
+            // Add mouseup as a backup trigger for edge cases
+            textElement.addEventListener('mouseup', () => {
+                setTimeout(() => {
                     const selection = window.getSelection();
                     const selectedText = selection.toString().trim();
+                    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
 
-                    if (selectedText.length >= 4 && !isProcessingSelection) {
-                        const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-                        if (range && textElement.contains(range.commonAncestorContainer)) {
-                            console.log('Desktop selection detected:', selectedText.substring(0, 30) + '...');
-                            await handleSelection();
+                    console.log('[Mouseup Debug] Mouseup event:', {
+                        textLength: selectedText.length,
+                        hasRange: !!range,
+                        isProcessing: isProcessingSelection
+                    });
+
+                    if (selectedText.length >= 4 && !isProcessingSelection && range && isRangeInTextElement(range)) {
+                        console.log('[Mouseup Debug] Mouseup backup trigger - selection detected:', selectedText.substring(0, 30) + '...');
+                        // Only process if we don't have a recent captured selection
+                        if (capturedText !== selectedText) {
+                            capturedText = selectedText;
+                            capturedRange = range.cloneRange();
+                            handleSelection();
+                        } else {
+                            console.log('[Mouseup Debug] Skipping - same text already captured');
                         }
                     }
-                }, 500); // Increased delay to ensure selection is complete
+                }, 150); // Slightly increased delay to allow selectionchange to fire first
             });
         }
 
