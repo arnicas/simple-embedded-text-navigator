@@ -36,6 +36,8 @@ export class ScoreManager {
     this.lastCelebratedScore = null;
     this.pendingMetadataDiscoveries = this.#createPendingMetadataState();
     this.isInitialLoad = true;
+    this.highestSentenceScore = 0;
+    this.highestSentenceText = '';
   }
 
   setCategories(categories) {
@@ -133,6 +135,20 @@ export class ScoreManager {
 
   getUniqueStories() {
     return this.uniqueStories;
+  }
+
+  updateHighestSentenceScore(score, text) {
+    if (score > this.highestSentenceScore) {
+      this.highestSentenceScore = score;
+      this.highestSentenceText = text || '';
+    }
+  }
+
+  getHighestSentenceScore() {
+    return {
+      score: this.highestSentenceScore,
+      text: this.highestSentenceText
+    };
   }
 
   getPhraseScore(phrase) {

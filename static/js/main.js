@@ -220,7 +220,7 @@ function setRandomStartingQuote() {
     author: randomItem.author,
     title: randomItem.title,
     story_title: randomItem.storytitle || "",
-    score: 1.0, // Default score for starting quote
+    score: 0.78, // Midrange score for starting quote (gives neutral background color)
     selectedCategories: [], // No selected text for starting quote
     foundCategories: foundCategories
   };
@@ -735,6 +735,11 @@ function replaceRelatedInfo(relatedItemObject) {
     foundCategories: relatedItemObject.foundCategories || []
   });
 
+  // Update highest sentence score tracker
+  if (scoreManager && sentencePoints > 0) {
+    scoreManager.updateHighestSentenceScore(sentencePoints, relatedItemObject.text);
+  }
+
   // Track metadata
   trackMetadata(relatedItemObject);
 
@@ -987,6 +992,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Simplified selection handler - only use mouseup for reliability
         let isProcessingSelection = false;
         let lastProcessedSelection = '';
+        let successfulSelections = 0; // Track successful selections
 
         async function handleSelection() {
             // Prevent processing if already busy
@@ -1041,6 +1047,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Process the selection with the captured range
                 await processSelection(textElement, selectedText, range);
+
+                // Increment successful selections counter and hide instructions after 2 successes
+                successfulSelections++;
+                if (successfulSelections === 2) {
+                    const instructionsElement = document.getElementById('instructions');
+                    if (instructionsElement) {
+                        gsap.to(instructionsElement, {
+                            duration: 1,
+                            opacity: 0,
+                            height: 0,
+                            marginBottom: 0,
+                            ease: 'power2.inOut',
+                            onComplete: () => {
+                                instructionsElement.style.display = 'none';
+                            }
+                        });
+                    }
+                }
 
             } catch (error) {
                 console.error('Error processing selection:', error);

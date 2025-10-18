@@ -424,13 +424,13 @@ export function updateBackgroundForScore(score) {
   // Normalize to 0-1 range based on actual score distribution
   const normalizedScore = (clampedScore - minScore) / (maxScore - minScore);
 
-  // Create a color that transitions from blue (low score ~0.6) to rose (high score ~0.99)
-  // Low scores (0.6): more blue-ish (#e8f0f8 - light blue)
-  // High scores (0.99): more rose-ish (#f8e8f0 - light rose)
+  // Create a color that transitions from blue (low score ~0.6) to rose/pink (high score ~0.99)
+  // Low scores (0.6): darker blue (#c8d8e8 - medium blue)
+  // High scores (0.99): brighter pink (#ffc8dc - bright pink)
 
-  const redComponent = Math.floor(232 + (248 - 232) * normalizedScore);   // 232 -> 248 (more red for higher scores)
-  const greenComponent = Math.floor(240 - (240 - 232) * normalizedScore); // 240 -> 232 (less green for higher scores)
-  const blueComponent = Math.floor(248 - (248 - 240) * normalizedScore);  // 248 -> 240 (less blue for higher scores)
+  const redComponent = Math.floor(200 + (255 - 200) * normalizedScore);   // 200 -> 255 (brighter red for higher scores)
+  const greenComponent = Math.floor(216 - (216 - 200) * normalizedScore); // 216 -> 200 (less green for higher scores)
+  const blueComponent = Math.floor(232 - (232 - 220) * normalizedScore);  // 232 -> 220 (less blue for higher scores)
 
   const backgroundColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
 

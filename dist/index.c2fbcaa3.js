@@ -739,7 +739,7 @@ function setRandomStartingQuote() {
         author: randomItem.author,
         title: randomItem.title,
         story_title: randomItem.storytitle || "",
-        score: 1.0,
+        score: 0.78,
         selectedCategories: [],
         foundCategories: foundCategories
     };
@@ -1115,6 +1115,8 @@ function replaceRelatedInfo(relatedItemObject) {
         rounded: Math.round(sentencePoints),
         foundCategories: relatedItemObject.foundCategories || []
     });
+    // Update highest sentence score tracker
+    if (scoreManager && sentencePoints > 0) scoreManager.updateHighestSentenceScore(sentencePoints, relatedItemObject.text);
     // Track metadata
     trackMetadata(relatedItemObject);
     // Update background color based on score
@@ -1316,6 +1318,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
         // Simplified selection handler - only use mouseup for reliability
         let isProcessingSelection = false;
         let lastProcessedSelection = '';
+        let successfulSelections = 0; // Track successful selections
         async function handleSelection() {
             // Prevent processing if already busy
             if (isProcessingSelection) {
@@ -1353,6 +1356,21 @@ document.addEventListener('DOMContentLoaded', async ()=>{
                 }, 300); // Increased delay to give users time to see their selection
                 // Process the selection with the captured range
                 await processSelection(textElement, selectedText, range);
+                // Increment successful selections counter and hide instructions after 2 successes
+                successfulSelections++;
+                if (successfulSelections === 2) {
+                    const instructionsElement = document.getElementById('instructions');
+                    if (instructionsElement) (0, _gsap.gsap).to(instructionsElement, {
+                        duration: 1,
+                        opacity: 0,
+                        height: 0,
+                        marginBottom: 0,
+                        ease: 'power2.inOut',
+                        onComplete: ()=>{
+                            instructionsElement.style.display = 'none';
+                        }
+                    });
+                }
             } catch (error) {
                 console.error('Error processing selection:', error);
                 // Show error message to user
@@ -49621,12 +49639,12 @@ function updateBackgroundForScore(score) {
     const clampedScore = Math.max(minScore, Math.min(maxScore, score));
     // Normalize to 0-1 range based on actual score distribution
     const normalizedScore = (clampedScore - minScore) / (maxScore - minScore);
-    // Create a color that transitions from blue (low score ~0.6) to rose (high score ~0.99)
-    // Low scores (0.6): more blue-ish (#e8f0f8 - light blue)
-    // High scores (0.99): more rose-ish (#f8e8f0 - light rose)
-    const redComponent = Math.floor(232 + 16 * normalizedScore); // 232 -> 248 (more red for higher scores)
-    const greenComponent = Math.floor(240 - 8 * normalizedScore); // 240 -> 232 (less green for higher scores)
-    const blueComponent = Math.floor(248 - 8 * normalizedScore); // 248 -> 240 (less blue for higher scores)
+    // Create a color that transitions from blue (low score ~0.6) to rose/pink (high score ~0.99)
+    // Low scores (0.6): darker blue (#c8d8e8 - medium blue)
+    // High scores (0.99): brighter pink (#ffc8dc - bright pink)
+    const redComponent = Math.floor(200 + 55 * normalizedScore); // 200 -> 255 (brighter red for higher scores)
+    const greenComponent = Math.floor(216 - 16 * normalizedScore); // 216 -> 200 (less green for higher scores)
+    const blueComponent = Math.floor(232 - 12 * normalizedScore); // 232 -> 220 (less blue for higher scores)
     const backgroundColor = `rgb(${redComponent}, ${greenComponent}, ${blueComponent})`;
     //console.log(`Score: ${score.toFixed(3)}, Normalized: ${normalizedScore.toFixed(3)}, Color: ${backgroundColor}`);
     // Update the CSS variable
@@ -50282,7 +50300,7 @@ function showCategoryModal(categoryName, imageSrc) {
     } else {
         modalTitle.textContent = capitalizedName;
         // Special message for "Yours" category when no words added
-        const defaultMessage = categoryName === 'yours' ? 'You can add your own text to search for, with score of 1 each.' : `Keep exploring to discover ${categoryName} elements and earn points!`;
+        const defaultMessage = categoryName === 'yours' ? 'You can add your own text to search for, with score of 1 each.' : `Keep exploring to discover ${categoryName} elements!`;
         modalCount.textContent = defaultMessage;
         modalCount.style.display = 'block';
     }
@@ -50479,6 +50497,13 @@ function showTotalModal(imageSrc) {
     const authorsTotal = totalMetadataCounts.authors || 0;
     const booksTotal = totalMetadataCounts.books || 0;
     const storiesTotal = totalMetadataCounts.stories || 0;
+    // Get highest sentence score
+    const highestSentence = scoreManager ? scoreManager.getHighestSentenceScore() : {
+        score: 0,
+        text: ''
+    };
+    const highestScore = Math.round(highestSentence.score);
+    const highestText = highestSentence.text ? highestSentence.text.length > 80 ? highestSentence.text.substring(0, 77) + '...' : highestSentence.text : 'None yet';
     // Set title
     modalTitle.textContent = `Total Progress: ${Math.round(totalPoints)} Points`;
     modalCount.style.display = 'none';
@@ -50504,6 +50529,26 @@ function showTotalModal(imageSrc) {
           <span style="font-weight: bold; color: #2d1810;">${Math.round(yoursPoints)}</span>
         </div>
       </div>
+
+      <div style="background: rgba(255, 215, 0, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px solid rgba(218, 165, 32, 0.3);">
+        <h4 style="color: #DAA520; margin-bottom: 10px;">\u{2B50} Highest Scoring Sentence</h4>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 14px; color: #555;">Score:</span>
+          <span style="font-weight: bold; color: #DAA520; font-size: 16px;">${highestScore} pts</span>
+        </div>
+        <p style="font-size: 12px; color: #666; font-style: italic; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 4px; margin: 0;">
+          "${highestText}"
+        </p>
+      </div>
+      
+      <div style="background: rgba(135, 206, 235, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          \u{1F4CA} Category Items Found: ${totalItems}
+        </p>
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          \u{1F3AF} Total Items Found: ${grandTotalItems}
+        </p>
+      </div>
       
       <div style="background: rgba(144, 238, 144, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
         <h4 style="color: #228B22; margin-bottom: 10px;">\u{1F4DA} Sources Discovered</h4>
@@ -50521,15 +50566,8 @@ function showTotalModal(imageSrc) {
         </div>
       </div>
       
-      <div style="background: rgba(135, 206, 235, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          \u{1F4CA} Category Items Found: ${totalItems}
-        </p>
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          \u{1F3AF} Total Items Found: ${grandTotalItems}
-        </p>
-      </div>
-      
+
+
       <p style="font-size: 12px; color: #666; font-style: italic;">
         Keep exploring to discover more quotes and sources and raise your score of unusual texts!
       </p>
@@ -50966,6 +51004,8 @@ class ScoreManager {
         this.lastCelebratedScore = null;
         this.pendingMetadataDiscoveries = this.#createPendingMetadataState();
         this.isInitialLoad = true;
+        this.highestSentenceScore = 0;
+        this.highestSentenceText = '';
     }
     setCategories(categories) {
         this.categories = categories || {};
@@ -51033,6 +51073,18 @@ class ScoreManager {
     }
     getUniqueStories() {
         return this.uniqueStories;
+    }
+    updateHighestSentenceScore(score, text) {
+        if (score > this.highestSentenceScore) {
+            this.highestSentenceScore = score;
+            this.highestSentenceText = text || '';
+        }
+    }
+    getHighestSentenceScore() {
+        return {
+            score: this.highestSentenceScore,
+            text: this.highestSentenceText
+        };
     }
     getPhraseScore(phrase) {
         const normalizedPhrase = (phrase || '').trim().toLowerCase();

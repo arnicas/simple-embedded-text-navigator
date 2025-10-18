@@ -344,7 +344,7 @@ export function showCategoryModal(categoryName, imageSrc) {
     // Special message for "Yours" category when no words added
     const defaultMessage = categoryName === 'yours' 
       ? 'You can add your own text to search for, with score of 1 each.'
-      : `Keep exploring to discover ${categoryName} elements and earn points!`;
+      : `Keep exploring to discover ${categoryName} elements!`;
     modalCount.textContent = defaultMessage;
     modalCount.style.display = 'block';
   }
@@ -601,7 +601,7 @@ export function showTotalModal(imageSrc) {
   const categoryPoints = Object.values(correctScores).reduce((sum, score) => sum + score, 0);
   const yoursPoints = correctScores.yours || 0;
   const nonYoursPoints = Math.max(0, categoryPoints - yoursPoints);
-  
+
   // Metadata discoveries no longer award points; total matches category points.
   const totalPoints = categoryPoints;
   const totalItems = Object.values(globalCategoryCounts).reduce((sum, count) => sum + count, 0);
@@ -614,6 +614,11 @@ export function showTotalModal(imageSrc) {
   const authorsTotal = totalMetadataCounts.authors || 0;
   const booksTotal = totalMetadataCounts.books || 0;
   const storiesTotal = totalMetadataCounts.stories || 0;
+
+  // Get highest sentence score
+  const highestSentence = scoreManager ? scoreManager.getHighestSentenceScore() : { score: 0, text: '' };
+  const highestScore = Math.round(highestSentence.score);
+  const highestText = highestSentence.text ? (highestSentence.text.length > 80 ? highestSentence.text.substring(0, 77) + '...' : highestSentence.text) : 'None yet';
   
   // Set title
   modalTitle.textContent = `Total Progress: ${Math.round(totalPoints)} Points`;
@@ -641,6 +646,26 @@ export function showTotalModal(imageSrc) {
           <span style="font-weight: bold; color: #2d1810;">${Math.round(yoursPoints)}</span>
         </div>
       </div>
+
+      <div style="background: rgba(255, 215, 0, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 2px solid rgba(218, 165, 32, 0.3);">
+        <h4 style="color: #DAA520; margin-bottom: 10px;">⭐ Highest Scoring Sentence</h4>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+          <span style="font-size: 14px; color: #555;">Score:</span>
+          <span style="font-weight: bold; color: #DAA520; font-size: 16px;">${highestScore} pts</span>
+        </div>
+        <p style="font-size: 12px; color: #666; font-style: italic; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 4px; margin: 0;">
+          "${highestText}"
+        </p>
+      </div>
+      
+      <div style="background: rgba(135, 206, 235, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          📊 Category Items Found: ${totalItems}
+        </p>
+        <p style="font-size: 14px; color: #555; margin: 5px 0;">
+          🎯 Total Items Found: ${grandTotalItems}
+        </p>
+      </div>
       
       <div style="background: rgba(144, 238, 144, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
         <h4 style="color: #228B22; margin-bottom: 10px;">📚 Sources Discovered</h4>
@@ -658,15 +683,8 @@ export function showTotalModal(imageSrc) {
         </div>
       </div>
       
-      <div style="background: rgba(135, 206, 235, 0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          📊 Category Items Found: ${totalItems}
-        </p>
-        <p style="font-size: 14px; color: #555; margin: 5px 0;">
-          🎯 Total Items Found: ${grandTotalItems}
-        </p>
-      </div>
-      
+
+
       <p style="font-size: 12px; color: #666; font-style: italic;">
         Keep exploring to discover more quotes and sources and raise your score of unusual texts!
       </p>
