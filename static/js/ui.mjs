@@ -12,80 +12,30 @@ import {
   randomY
 } from './effects.mjs';
 
-// Module-scoped variables to store references passed during initialization
+// Module-scoped variables - ScoreManager now handles all state
 let scoreManager;
-let categories = {};
-let globalCategoryCounts = {};
-let globalCategoryScores = {};
-let globalCategoryMatches = {};
-let globalMetadataCounts = {};
-let totalMetadataCounts = {};
-let word_scores = {};
-let userYoursWords = [];
-let METADATA_DISCOVERY_SCORES = {};
-let uniqueAuthors, uniqueBooks, uniqueStories;
 
-// Callback functions from main.js
+// Callback functions from main.js - simplified since ScoreManager handles most operations
 let saveYoursChangesCallback;
 let findRelatedTextCallback;
-let getPhraseScoreCallback;
-let recalculateAllCategoryScoresCallback;
-let updateYoursScoreDisplayCallback;
-let updateTotalDisplayCallback;
-let updateMetadataCountsDisplayCallback;
 let reorderCategoryBucketsCallback;
-let trackMetadataCallback;
-let calculateAndCelebrateMetadataScoreCallback;
-let triggerPendingCategoryCelebrationCallback;
-let incrementCategoryCountsCallback;
 
 // Initialize the UI module with references from main.js
 export function initializeUI(config) {
   scoreManager = config.scoreManager;
 
-  // Store state references (prefer ScoreManager when available)
-  categories = scoreManager ? scoreManager.getCategories() : (config.categories || {});
-  globalCategoryCounts = scoreManager ? scoreManager.getGlobalCategoryCounts() : (config.globalCategoryCounts || {});
-  globalCategoryScores = scoreManager ? scoreManager.getGlobalCategoryScores() : (config.globalCategoryScores || {});
-  globalCategoryMatches = scoreManager ? scoreManager.getGlobalCategoryMatches() : (config.globalCategoryMatches || {});
-  globalMetadataCounts = scoreManager ? scoreManager.getGlobalMetadataCounts() : (config.globalMetadataCounts || {});
-  totalMetadataCounts = scoreManager ? scoreManager.getTotalMetadataCounts() : (config.totalMetadataCounts || {});
-  word_scores = scoreManager ? scoreManager.getWordScores() : (config.word_scores || {});
-  userYoursWords = scoreManager ? scoreManager.getUserYoursWords() : (config.userYoursWords || []);
-  METADATA_DISCOVERY_SCORES = scoreManager ? scoreManager.getMetadataDiscoveryScores() : (config.METADATA_DISCOVERY_SCORES || {});
-  uniqueAuthors = scoreManager ? scoreManager.getUniqueAuthors() : config.uniqueAuthors;
-  uniqueBooks = scoreManager ? scoreManager.getUniqueBooks() : config.uniqueBooks;
-  uniqueStories = scoreManager ? scoreManager.getUniqueStories() : config.uniqueStories;
-
-  // Store callback functions
+  // Store callback functions - simplified since ScoreManager handles most operations
   findRelatedTextCallback = config.findRelatedText;
   reorderCategoryBucketsCallback = config.reorderCategoryBuckets;
-  incrementCategoryCountsCallback = config.incrementCategoryCounts;
 
   if (scoreManager) {
-    saveYoursChangesCallback = () => scoreManager.syncYoursWords(userYoursWords);
-    getPhraseScoreCallback = (phrase) => scoreManager.getPhraseScore(phrase);
-    recalculateAllCategoryScoresCallback = () => scoreManager.recalculateAllCategoryScores();
-    updateYoursScoreDisplayCallback = () => scoreManager.updateYoursScoreDisplay();
-    updateTotalDisplayCallback = () => scoreManager.updateTotalDisplay();
-    updateMetadataCountsDisplayCallback = () => scoreManager.updateMetadataCountsDisplay();
-    trackMetadataCallback = (relatedItemObject) => scoreManager.trackMetadata(relatedItemObject);
-    calculateAndCelebrateMetadataScoreCallback = () => scoreManager.calculateAndCelebrateMetadataScore();
-    triggerPendingCategoryCelebrationCallback = () => scoreManager.triggerPendingCategoryCelebration();
+    saveYoursChangesCallback = () => scoreManager.syncYoursWords(scoreManager.getUserYoursWords());
+    
+    // Set up global category data for effects module
+    setGlobalCategoryData(scoreManager.getGlobalCategoryCounts(), scoreManager.getGlobalCategoryScores());
   } else {
     saveYoursChangesCallback = config.saveYoursChanges;
-    getPhraseScoreCallback = config.getPhraseScore;
-    recalculateAllCategoryScoresCallback = config.recalculateAllCategoryScores;
-    updateYoursScoreDisplayCallback = config.updateYoursScoreDisplay;
-    updateTotalDisplayCallback = config.updateTotalDisplay;
-    updateMetadataCountsDisplayCallback = config.updateMetadataCountsDisplay;
-    trackMetadataCallback = config.trackMetadata;
-    calculateAndCelebrateMetadataScoreCallback = config.calculateAndCelebrateMetadataScore;
-    triggerPendingCategoryCelebrationCallback = config.triggerPendingCategoryCelebration;
   }
-
-  // Set up global category data for effects module
-  setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
 
   // Set up UI event listeners
   setupUIEventListeners();
@@ -280,15 +230,14 @@ export function createCategoryBuckets(categoriesData) {
 }
 export function saveYoursChanges() {
   if (scoreManager) {
-    scoreManager.syncYoursWords(userYoursWords);
+    scoreManager.syncYoursWords(scoreManager.getUserYoursWords());
   } else if (saveYoursChangesCallback) {
     saveYoursChangesCallback();
   }
 
-  updateYoursScoreDisplayCallback?.();
-  updateTotalDisplayCallback?.();
+  // ScoreManager handles these updates directly
 
-  console.log('Saved "Yours" category words:', userYoursWords);
+  console.log('Saved "Yours" category words:', scoreManager ? scoreManager.getUserYoursWords() : []);
   console.log('User words added to "Yours" category - they will get scores when discovered in text');
 
   hideYoursEditModal();
@@ -322,18 +271,18 @@ export function showCategoryModal(categoryName, imageSrc) {
   modalImage.alt = categoryName;
   modalImage.style.display = 'block';
   
-  const matches = globalCategoryMatches[categoryName];
+  const matches = scoreManager ? scoreManager.getGlobalCategoryMatches()[categoryName] : {};
 
   // Recalculate total score from the ground truth (globalCategoryMatches) to ensure consistency.
   let totalRecalculatedScore = 0;
   if (matches && Object.keys(matches).length > 0) {
       for (const [phrase, count] of Object.entries(matches)) {
-          totalRecalculatedScore += count * getPhraseScoreCallback(phrase);
+          totalRecalculatedScore += count * (scoreManager ? scoreManager.getPhraseScore(phrase) : 0);
       }
   }
 
   // Set title with count and RECALCULATED score
-  const count = globalCategoryCounts[categoryName] || 0;
+  const count = scoreManager ? scoreManager.getGlobalCategoryCounts()[categoryName] || 0 : 0;
   const score = totalRecalculatedScore;
   const capitalizedName = categoryName.charAt(0).toUpperCase() + categoryName.slice(1);
   if (count > 0) {
@@ -362,7 +311,7 @@ export function showCategoryModal(categoryName, imageSrc) {
       ${scoringExplanation}
       <div class="category-matches-list">
         ${matchesArray.map(([phrase, count]) => {
-          const scorePerItem = getPhraseScoreCallback(phrase);
+          const scorePerItem = scoreManager ? scoreManager.getPhraseScore(phrase) : 0;
           const display = `${phrase} (${count} &times; ${scorePerItem}pts)`;
           return `<span class="match-phrase">${display}</span>`;
         }).join('')}
@@ -442,6 +391,7 @@ export function updateYoursWordsDisplay() {
   const wordsList = document.getElementById('yoursWordsList');
   if (!wordsList) return;
 
+  const userYoursWords = scoreManager ? scoreManager.getUserYoursWords() : [];
   if (userYoursWords.length === 0) {
     wordsList.innerHTML = '<p class="empty-list">No words added yet. Add some words above!</p>';
     return;
@@ -450,6 +400,7 @@ export function updateYoursWordsDisplay() {
   wordsList.innerHTML = userYoursWords.map((word, index) => {
     // Check if this word exists in any preset categories
     const presetCategories = [];
+    const categories = scoreManager ? scoreManager.getCategories() : {};
     Object.keys(categories).forEach(categoryName => {
       if (categoryName !== 'yours' && categories[categoryName] && categories[categoryName].includes(word.toLowerCase())) {
         presetCategories.push(categoryName);
@@ -480,9 +431,10 @@ export function updateYoursWordsDisplay() {
 
 export function addYoursWord() {
   const input = document.getElementById('yoursNewWord');
-  if (!input) return;
+  if (!input || !scoreManager) return;
 
   const word = input.value.trim().toLowerCase();
+  const userYoursWords = scoreManager.getUserYoursWords();
 
   if (!word) {
     alert('Please enter a word or phrase.');
@@ -500,7 +452,8 @@ export function addYoursWord() {
   }
 
   // Check if this word already exists in the scoring system with a higher score
-  const existingScore = word_scores[word];
+  const wordScores = scoreManager.getWordScores();
+  const existingScore = wordScores[word];
   if (existingScore && existingScore > 1) {
     alert('This word already exists in the system with a higher score. You cannot add it to your personal category.');
     return;
@@ -512,6 +465,9 @@ export function addYoursWord() {
 }
 
 export function removeYoursWord(index) {
+  if (!scoreManager) return;
+  
+  const userYoursWords = scoreManager.getUserYoursWords();
   const wordToRemove = userYoursWords[index];
   const normalizedWord = wordToRemove.toLowerCase();
 
@@ -520,8 +476,9 @@ export function removeYoursWord(index) {
 
   // Remove from word_scores only if it has score 1 (user-added)
   // Don't remove words with higher scores as they might be from the original dataset
-  if (word_scores[normalizedWord] === 1) {
-    delete word_scores[normalizedWord];
+  const wordScores = scoreManager.getWordScores();
+  if (wordScores[normalizedWord] === 1) {
+    delete wordScores[normalizedWord];
   }
 
   updateYoursWordsDisplay();
@@ -546,6 +503,8 @@ export function showMetadataModal(metadataType, imageSrc) {
   modalImage.style.display = 'block';
   
   // Set title with count and progress
+  const globalMetadataCounts = scoreManager ? scoreManager.getGlobalMetadataCounts() : {};
+  const totalMetadataCounts = scoreManager ? scoreManager.getTotalMetadataCounts() : {};
   const discovered = globalMetadataCounts[metadataType] || 0;
   const total = totalMetadataCounts[metadataType] || 0;
   const displayName = metadataType.charAt(0).toUpperCase() + metadataType.slice(1);
@@ -563,12 +522,14 @@ export function showMetadataModal(metadataType, imageSrc) {
   
   // Set matched items
   let uniqueItems = [];
-  if (metadataType === 'authors') {
-    uniqueItems = Array.from(uniqueAuthors);
-  } else if (metadataType === 'books') {
-    uniqueItems = Array.from(uniqueBooks);
-  } else if (metadataType === 'stories') {
-    uniqueItems = Array.from(uniqueStories);
+  if (scoreManager) {
+    if (metadataType === 'authors') {
+      uniqueItems = Array.from(scoreManager.getUniqueAuthors());
+    } else if (metadataType === 'books') {
+      uniqueItems = Array.from(scoreManager.getUniqueBooks());
+    } else if (metadataType === 'stories') {
+      uniqueItems = Array.from(scoreManager.getUniqueStories());
+    }
   }
   
   if (uniqueItems.length > 0) {
@@ -602,13 +563,17 @@ export function showTotalModal(imageSrc) {
   modalImage.style.display = 'block';
   
   // Calculate totals
-  const correctScores = recalculateAllCategoryScoresCallback();
+  const correctScores = scoreManager ? scoreManager.recalculateAllCategoryScores() : {};
   const categoryPoints = Object.values(correctScores).reduce((sum, score) => sum + score, 0);
   const yoursPoints = correctScores.yours || 0;
   const nonYoursPoints = Math.max(0, categoryPoints - yoursPoints);
 
   // Metadata discoveries no longer award points; total matches category points.
   const totalPoints = categoryPoints;
+  const globalCategoryCounts = scoreManager ? scoreManager.getGlobalCategoryCounts() : {};
+  const globalMetadataCounts = scoreManager ? scoreManager.getGlobalMetadataCounts() : {};
+  const totalMetadataCounts = scoreManager ? scoreManager.getTotalMetadataCounts() : {};
+  
   const totalItems = Object.values(globalCategoryCounts).reduce((sum, count) => sum + count, 0);
   const metadataTotal = Object.values(globalMetadataCounts).reduce((sum, count) => sum + count, 0);
   const grandTotalItems = totalItems + metadataTotal;
@@ -789,100 +754,13 @@ export function highlightPhrasesInText(text, categories) {
   return { highlightedText, highlights };
 }
 
-export function updateCategoryCountsDisplay() {
-  // Check if the callback is properly defined before using it
-  if (!recalculateAllCategoryScoresCallback || typeof recalculateAllCategoryScoresCallback !== 'function') {
-    console.warn('recalculateAllCategoryScoresCallback not properly initialized, skipping category display update');
-    return;
-  }
-  
-  const correctScores = recalculateAllCategoryScoresCallback();
-  console.log('Updating category display - counts:', globalCategoryCounts, 'scores:', correctScores);
-  Object.keys(globalCategoryCounts).forEach(category => {
-    const count = globalCategoryCounts[category] || 0;
-    const score = correctScores[category] || 0;
-    const countElement = document.getElementById(`count-${category}`);
-    if (countElement) {
-      if (count > 0 || score > 0) {
-        const displayText = `${Math.round(score)} (${count})`;
-        countElement.textContent = displayText;
-        countElement.style.display = 'inline';
-        console.log(`Set ${category} display to: ${displayText}`);
-      } else {
-        countElement.style.display = 'none';
-      }
-    }
-  });
-  
-  // Update "Yours" score display
-  updateYoursScoreDisplayCallback();
+// updateCategoryCountsDisplay is now handled by ScoreManager directly
 
-  // Update total display whenever category scores change
-  updateTotalDisplayCallback();
-}
+// updateMetadataCountsDisplay is now handled by ScoreManager directly
 
-export function updateMetadataCountsDisplay() {
-  // Update the UI to show metadata counts with progress
-  console.log('Updating metadata display:', globalMetadataCounts);
-  Object.keys(globalMetadataCounts).forEach(metadataType => {
-    const discovered = globalMetadataCounts[metadataType] || 0;
-    const total = totalMetadataCounts[metadataType] || 0;
-    const countElement = document.getElementById(`metadata-count-${metadataType}`);
-    console.log(`Updating ${metadataType}: discovered=${discovered}, total=${total}, element exists=${!!countElement}`);
-    if (countElement) {
-      if (discovered > 0) {
-        // Show discovered/total format with checkmark if completed
-        const isComplete = discovered === total;
-        const checkmark = isComplete ? ' ✓' : '';
-        countElement.textContent = `${discovered}/${total}${checkmark}`;
-        countElement.style.display = 'inline';
-        console.log(`Set ${metadataType} display to: ${discovered}/${total}${checkmark} (complete: ${isComplete})`);
-      } else {
-        countElement.style.display = 'none';
-      }
-    }
-  });
-  
-  // Update total bucket display
-  updateTotalDisplayCallback();
-}
+// updateYoursScoreDisplay is now handled by ScoreManager directly
 
-export function updateYoursScoreDisplay() {
-  const count = globalCategoryCounts.yours || 0;
-  const score = globalCategoryScores.yours || 0;
-  const countElement = document.getElementById('count-yours');
-
-  if (countElement) {
-    // Update the standard category count display
-    countElement.textContent = `${Math.round(score)} (${count})`;
-    countElement.style.display = 'inline';
-    console.log(`Set Yours count display to: ${Math.round(score)} (${count})`);
-  } else {
-    console.warn('count-yours element not found');
-  }
-}
-
-export function updateTotalDisplay() {
-  const correctScores = recalculateAllCategoryScoresCallback();
-  // Calculate total category points
-  const categoryPoints = Object.values(correctScores).reduce((sum, score) => sum + score, 0);
-  
-  // Calculate total metadata points
-  const metadataPoints = (globalMetadataCounts.authors * METADATA_DISCOVERY_SCORES.NEW_AUTHOR) +
-                        (globalMetadataCounts.books * METADATA_DISCOVERY_SCORES.NEW_BOOK) +
-                        (globalMetadataCounts.stories * METADATA_DISCOVERY_SCORES.NEW_STORY);
-  
-  // Total points is sum of both
-  const totalPoints = categoryPoints + metadataPoints;
-  
-  const totalPointsElement = document.getElementById('metadata-count-total');
-
-  if (totalPointsElement) {
-    totalPointsElement.textContent = `${Math.round(totalPoints)} pts`;
-    totalPointsElement.style.display = 'inline';
-    console.log(`Set total points display to: ${Math.round(totalPoints)} pts (Categories: ${Math.round(categoryPoints)}, Metadata: ${Math.round(metadataPoints)})`);
-  }
-}
+// updateTotalDisplay is now handled by ScoreManager directly
 
 export function activateCategoryBuckets(selectedCategories, foundCategories) {
   // Activate buckets for selected text categories
@@ -954,7 +832,9 @@ export function updateCategoryBuckets(selectedCategories, foundCategories) {
         //console.log('Processing category scoring for:', foundCategories);
         
         // Process any pending metadata celebrations after word celebrations complete
-        calculateAndCelebrateMetadataScoreCallback();
+        if (scoreManager) {
+          scoreManager.calculateAndCelebrateMetadataScore();
+        }
         
         // Clean up any remaining HTML markup after a delay
         gsap.delayedCall(2, () => {
@@ -1036,8 +916,10 @@ export function updateCategoryBuckets(selectedCategories, foundCategories) {
 
     // Score celebrations should be triggered regardless of whether the animation runs.
     gsap.delayedCall(2.5, () => {
-      triggerPendingCategoryCelebrationCallback();
-      calculateAndCelebrateMetadataScoreCallback();
+      if (scoreManager) {
+        scoreManager.triggerPendingCategoryCelebration();
+        scoreManager.calculateAndCelebrateMetadataScore();
+      }
     });
 
   } 

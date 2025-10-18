@@ -4,12 +4,12 @@
 
 ## Overview
 
-This is now an overloaded fairy tale hunter app with scoring etc. Mea culpa. The key elements are these:
+This is now an over-engineered fairytale search web app with scoring etc. Mea culpa. The key elements are these:
 
 * The [client-vector-search](https://github.com/yusufhilmi/client-vector-search#readme) node package.
 * [Transformers.js](https://huggingface.co/docs/transformers.js/en/index) from HuggingFace.
-* A very small embedding model that runs in the browser, [bge-micro](https://huggingface.co/TaylorAI/bge-micro). You need the onnx directory and the config files.  Check my folder in static/site-data/cache for the files.
-* Data embedded with the model, stored in json, for instance. In this case I used fairy tale texts that I previously cleaned, sentence-tokenized, classified (to get descriptive not dialogue etc.), and enriched with some metadata.  This was the bulk of the work -- the rest is endless fiddling with UI stuff and arguing with Claude over that.
+* A very small embedding model that runs in the browser, [bge-micro](https://huggingface.co/TaylorAI/bge-micro). It used to be loaded locally but something changed in the latest browsers to make this unreliable; now it loads from HuggingFace.
+* Data embedded with the model, stored in json files. In this case I used fairy tale texts that I previously cleaned, sentence-tokenized, classified (to get descriptive not dialogue etc.), and enriched with some metadata.  This was the bulk of the work -- the rest is endless fiddling with UI stuff and arguing with Claude over that.
 
 ## The key tech points for a student etc.
 
@@ -20,11 +20,6 @@ import { initializeModel, getEmbedding, EmbeddingIndex } from 'client-vector-sea
 import { env } from '@xenova/transformers';
 ```
 
-### Crucial Path Setting for Model
-
-```
-env.localModelPath = './site-data/cache';
-```
 
 ### Your init:
 
@@ -37,6 +32,8 @@ async function initialize() {
       await initializeModel("TaylorAI/bge-micro");
       await loadFiles();
       index = await createIndex();
+      
+  }
 
 ```
 
@@ -75,8 +72,7 @@ async function loadFiles() {
   console.log('results of search', results);
 ```
 
-If there is interest, I could add a skeleton version that doesn't have all the UI cruft Claude kept talking me into (and then being meh at).
-
+If there is interest, I could add a skeleton version that doesn't have all the UI cruft Claude kept talking me into.
 
 ## Running During dev
 
@@ -129,7 +125,7 @@ I used [this codepen from Chris Smith](https://codepen.io/BlogFire/pen/LYoRWLe)t
 
 I used a <a href="https://glif.app/@appelsiensam/glifs/cm6y4w20b0000931xnf5p8yto">glif.ai app</a> to make the medieval-cartoon style icons.
 
-The UI code was done with extensive AI help from mostly Claude and Gemini Pro 2.5. So it's a mess and needs some cleanup (working on it).  This was a bit of a process. They still have a ways to go with understanding DOM animation and CSS, imo.
+The UI code was done with extensive AI help from mostly Claude and Gemini Pro 2.5. This was a bit of a process. They still have a ways to go with understanding DOM animation and CSS, imo.
 
 The fairy tales came from [Project Gutenberg](https://www.gutenberg.org/).
 

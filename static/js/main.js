@@ -80,38 +80,11 @@ const METADATA_DISCOVERY_SCORES = {
 // - Scoring happens in trackMetadata() function when relatedItemObject contains new metadata
 // - Multiple discoveries in one selection stack (e.g., new book + new author = 5+7 = 12 pts)
 
-// Global category counters that persist across sessions
-let globalCategoryCounts = {};
-let globalCategoryScores = {};
-
-// Global category matched phrases that persist across sessions
-let globalCategoryMatches = {};
-
-// User's custom "Yours" category words
-let userYoursWords = [];
-
-// Metadata tracking (authors, books, stories) - count only
-let globalMetadataCounts = {
-  'authors': 0,
-  'books': 0, 
-  'stories': 0
-};
-
-// Total tracking across all categories
-let totalScore = 0;
-let totalItemsFound = 0;
-
-// Track unique metadata items
-let uniqueAuthors = new Set();
-let uniqueBooks = new Set();
-let uniqueStories = new Set();
-
-// Total counts available in dataset
-let totalMetadataCounts = {
-  'authors': 0,
-  'books': 0,
-  'stories': 0
-};
+// Note: All global state variables are now managed by ScoreManager
+// - globalCategoryCounts, globalCategoryScores, globalCategoryMatches
+// - globalMetadataCounts, totalMetadataCounts
+// - uniqueAuthors, uniqueBooks, uniqueStories
+// - userYoursWords
 
 
 
@@ -151,20 +124,7 @@ async function loadFiles() {
   countDatasetMetadata();
   
   // Initialize "Yours" category with user words if they exist
-  if (userYoursWords && userYoursWords.length > 0) {
-    categories.yours = [...userYoursWords];
-    console.log('Initialized "Yours" category with user words:', userYoursWords);
-    
-    // Add new words to word_scores (but don't give them scores until discovered)
-    userYoursWords.forEach(word => {
-      const normalizedWord = word.toLowerCase();
-      // Don't add to word_scores until the phrase is actually discovered in text
-      // This ensures the modal only shows actually discovered items
-    });
-    
-    // Initialize global data for "Yours" category
-    recalculateYoursCategory();
-  }
+  // This will be handled by ScoreManager after it's initialized
 }
 
 function countDatasetMetadata() {
@@ -191,12 +151,14 @@ function countDatasetMetadata() {
     }
   });
   
-  // Update total counts
-  totalMetadataCounts.authors = datasetAuthors.size;
-  totalMetadataCounts.books = datasetBooks.size;
-  totalMetadataCounts.stories = datasetStories.size;
+  // Update total counts - will be set in ScoreManager
+  const counts = {
+    authors: datasetAuthors.size,
+    books: datasetBooks.size,
+    stories: datasetStories.size
+  };
 
-  return totalMetadataCounts;
+  return counts;
 }
 
 function setRandomStartingQuote() {
@@ -239,8 +201,10 @@ function setRandomStartingQuote() {
     //console.log('Processing initial categories for scoring');
 
     // Count these discoveries immediately so the UI reflects the opening text.
-    incrementCategoryCounts([], foundCategories);
-    updateCategoryCountsDisplay();
+    if (scoreManager) {
+      scoreManager.incrementCategoryCounts([], foundCategories);
+      scoreManager.updateCategoryCountsDisplay();
+    }
 
     // Reorder buckets based on initial scores
     gsap.delayedCall(0.5, () => {
@@ -252,21 +216,25 @@ function setRandomStartingQuote() {
 
 function getDatasetMetadataCounts() {
   // Helper function to get total counts available in dataset
+  if (!scoreManager) return { authors: 0, books: 0, stories: 0, total: 0 };
+  const totalCounts = scoreManager.getTotalMetadataCounts();
   return {
-    authors: totalMetadataCounts.authors,
-    books: totalMetadataCounts.books,
-    stories: totalMetadataCounts.stories,
-    total: totalMetadataCounts.authors + totalMetadataCounts.books + totalMetadataCounts.stories
+    authors: totalCounts.authors,
+    books: totalCounts.books,
+    stories: totalCounts.stories,
+    total: totalCounts.authors + totalCounts.books + totalCounts.stories
   };
 }
 
 function getDiscoveredMetadataCounts() {
   // Helper function to get discovered counts
+  if (!scoreManager) return { authors: 0, books: 0, stories: 0, total: 0 };
+  const metadataCounts = scoreManager.getGlobalMetadataCounts();
   return {
-    authors: globalMetadataCounts.authors,
-    books: globalMetadataCounts.books,
-    stories: globalMetadataCounts.stories,
-    total: globalMetadataCounts.authors + globalMetadataCounts.books + globalMetadataCounts.stories
+    authors: metadataCounts.authors,
+    books: metadataCounts.books,
+    stories: metadataCounts.stories,
+    total: metadataCounts.authors + metadataCounts.books + metadataCounts.stories
   };
 }
 
@@ -400,93 +368,14 @@ function getCategory(text) {
 
     const aggregate = categoryAggregates.get(category);
     aggregate.phrases[phrase] = (aggregate.phrases[phrase] || 0) + 1;
-    aggregate.score += getPhraseScore(phrase);
+    aggregate.score += scoreManager ? scoreManager.getPhraseScore(phrase) : 0;
   });
 
   return Array.from(categoryAggregates.values());
 }
 
 
-function getPhraseScore(phrase) {
-  if (!scoreManager) {
-    return 0;
-  }
-  return scoreManager.getPhraseScore(phrase);
-}
-
-function recalculateAllCategoryScores() {
-  if (!scoreManager) {
-    return {};
-  }
-  return scoreManager.recalculateAllCategoryScores();
-}
-
-
-
-// ===== YOURS CATEGORY EDIT MODAL FUNCTIONS =====
-
-
-function recalculateYoursCategory() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.recalculateYoursCategory();
-}
-
-// Note: highlightPhrasesInText is imported from ui.mjs and used in the highlighting system
-
-function initializeGlobalCounts() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.initializeGlobalCounts(categories);
-}
-
-function incrementCategoryCounts(selectedCategories, foundCategories) {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.incrementCategoryCounts(selectedCategories, foundCategories);
-}
-
-function triggerPendingCategoryCelebration() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.triggerPendingCategoryCelebration();
-}
-
-// Score celebration functions are now imported from effects.js
-
-// cleanupTextContent function is now imported from effects.js
-
-function updateCategoryCountsDisplay() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.updateCategoryCountsDisplay();
-}
-
-function updateMetadataCountsDisplay() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.updateMetadataCountsDisplay();
-}
-
-function updateYoursScoreDisplay() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.updateYoursScoreDisplay();
-}
-
-function updateTotalDisplay() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.updateTotalDisplay();
-}
+// ScoreManager methods are now called directly - wrapper functions removed
 
 // Throttle reordering to prevent excessive animations
 let reorderTimeout = null;
@@ -572,26 +461,16 @@ function replaceRelatedInfo(relatedItemObject) {
   }
 
   // Track metadata
-  trackMetadata(relatedItemObject);
+  if (scoreManager) {
+    scoreManager.trackMetadata(relatedItemObject);
+  }
 
   // Update background color based on score
   updateBackgroundForScore(relatedItemObject.score);
 } 
 
 
-function trackMetadata(relatedItemObject) {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.trackMetadata(relatedItemObject);
-}
-
-function calculateAndCelebrateMetadataScore() {
-  if (!scoreManager) {
-    return;
-  }
-  scoreManager.calculateAndCelebrateMetadataScore();
-}
+// trackMetadata and calculateAndCelebrateMetadataScore are now called directly on scoreManager
 
 
 async function processSelection(textElement, selectedText, range) {
@@ -662,10 +541,12 @@ async function processSelection(textElement, selectedText, range) {
 
     if (relatedItemObject) {
       // 1. DATA: Update scores and counts immediately and reliably.
-      incrementCategoryCounts(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
-      
-      // 2. UI DATA: Update the bucket displays with new scores and reorder them.
-      updateCategoryCountsDisplay();
+      if (scoreManager) {
+        scoreManager.incrementCategoryCounts(relatedItemObject.selectedCategories, relatedItemObject.foundCategories);
+        
+        // 2. UI DATA: Update the bucket displays with new scores and reorder them.
+        scoreManager.updateCategoryCountsDisplay();
+      }
       reorderCategoryBuckets();
 
       // 3. VISUALS: Animate text change, update info panel, and trigger bucket animations.
@@ -720,19 +601,26 @@ async function initialize() {
       await loadFiles();
       index = await createIndex();
 
+      // Get metadata counts from dataset analysis
+      const metadataCounts = countDatasetMetadata();
+      
       scoreManager = new ScoreManager({
         categories,
         wordScores: word_scores,
-        userYoursWords,
+        userYoursWords: [], // Will be loaded from localStorage if available
         metadataDiscoveryScores: METADATA_DISCOVERY_SCORES,
-        globalCategoryCounts,
-        globalCategoryScores,
-        globalCategoryMatches,
-        globalMetadataCounts,
-        totalMetadataCounts,
-        uniqueAuthors,
-        uniqueBooks,
-        uniqueStories,
+        globalCategoryCounts: {},
+        globalCategoryScores: {},
+        globalCategoryMatches: {},
+        globalMetadataCounts: {
+          'authors': 0,
+          'books': 0, 
+          'stories': 0
+        },
+        totalMetadataCounts: metadataCounts,
+        uniqueAuthors: new Set(),
+        uniqueBooks: new Set(),
+        uniqueStories: new Set(),
         setGlobalCategoryData,
         showCategoryScoreCelebration,
         showMetadataScoreCelebration
@@ -742,46 +630,27 @@ async function initialize() {
       createCategoryBuckets(categories);
       createMetadataBuckets();
 
-      // Initialize global category counters
-      initializeGlobalCounts();
-      recalculateYoursCategory();
+  // Initialize global category counters
+  if (scoreManager) {
+    scoreManager.initializeGlobalCounts(categories);
+    scoreManager.recalculateYoursCategory();
+  }
       // Share global category data with effects.js for bucket reordering
-      setGlobalCategoryData(globalCategoryCounts, globalCategoryScores);
+      setGlobalCategoryData(scoreManager.getGlobalCategoryCounts(), scoreManager.getGlobalCategoryScores());
 
-      // Initialize the UI module with all necessary state and callbacks
+      // Initialize the UI module with ScoreManager reference
       initializeUI({
           scoreManager: scoreManager,
-          // State references
-          categories: categories,
-          globalCategoryCounts: globalCategoryCounts,
-          globalCategoryScores: globalCategoryScores,
-          globalCategoryMatches: globalCategoryMatches,
-          globalMetadataCounts: globalMetadataCounts,
-          totalMetadataCounts: totalMetadataCounts,
-          word_scores: word_scores,
-          userYoursWords: userYoursWords,
-          METADATA_DISCOVERY_SCORES: METADATA_DISCOVERY_SCORES,
-          uniqueAuthors: uniqueAuthors,
-          uniqueBooks: uniqueBooks,
-          uniqueStories: uniqueStories,
-          
-          // Callback functions
+          // Callback functions - now using ScoreManager methods directly
           saveYoursChanges: saveYoursChanges,
           findRelatedText: findRelatedText,
-          getPhraseScore: getPhraseScore,
-          recalculateAllCategoryScores: recalculateAllCategoryScores,
-          updateYoursScoreDisplay: updateYoursScoreDisplay,
-          updateTotalDisplay: updateTotalDisplay,
-          updateMetadataCountsDisplay: updateMetadataCountsDisplay,
-          reorderCategoryBuckets: reorderCategoryBuckets,
-          trackMetadata: trackMetadata,
-          calculateAndCelebrateMetadataScore: calculateAndCelebrateMetadataScore,
-          triggerPendingCategoryCelebration: triggerPendingCategoryCelebration,
-          incrementCategoryCounts: incrementCategoryCounts
+          reorderCategoryBuckets: reorderCategoryBuckets
       });
 
-      updateCategoryCountsDisplay();
-      updateMetadataCountsDisplay();
+      if (scoreManager) {
+        scoreManager.updateCategoryCountsDisplay();
+        scoreManager.updateMetadataCountsDisplay();
+      }
 
       // Set random starting quote
       setRandomStartingQuote();

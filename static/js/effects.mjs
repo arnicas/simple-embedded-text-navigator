@@ -1,7 +1,8 @@
 
 import { gsap } from 'gsap';
 
-// ===== GLOBAL CATEGORY DATA MANAGEMENT (moved to top to ensure clear module scope) =====
+// ===== GLOBAL CATEGORY DATA MANAGEMENT =====
+// These functions now receive data from ScoreManager instead of maintaining local state
 let globalCategoryCounts = {};
 let globalCategoryScores = {};
 
