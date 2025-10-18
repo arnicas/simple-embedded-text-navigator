@@ -481,11 +481,16 @@ export function updateYoursWordsDisplay() {
 export function addYoursWord() {
   const input = document.getElementById('yoursNewWord');
   if (!input) return;
-  
+
   const word = input.value.trim().toLowerCase();
 
   if (!word) {
     alert('Please enter a word or phrase.');
+    return;
+  }
+
+  if (word.length < 3) {
+    alert('Words must be at least 3 characters long.');
     return;
   }
 

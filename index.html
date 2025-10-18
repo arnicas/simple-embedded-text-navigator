@@ -15,9 +15,9 @@
 </head>
 <body>
     <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
-        <filter id="torn">
-            <feTurbulence x="0" y="0" baseFrequency="0.02" numOctaves="6" seed="5" />
-            <feDisplacementMap in="SourceGraphic" scale="12" />
+        <filter id="torn" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse" color-interpolation-filters="linearRGB">
+            <feTurbulence x="0" y="0" baseFrequency="0.02" numOctaves="6" seed="5" type="fractalNoise" result="turbulence" />
+            <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="12" xChannelSelector="R" yChannelSelector="G" />
         </filter>
     </svg>
     <div class="container">
