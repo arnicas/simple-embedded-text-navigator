@@ -227,18 +227,22 @@ body {
     }
     
     #textContainer {
-        padding: 15px;
+        padding: 15px 20px;
         margin: 10px;
-        max-width: calc(100% - 20px);
+        max-width: 280px;
         min-height: 200px; /* Add minimum height for mobile to prevent resizing */
         display: flex; /* Add flexbox for centering */
         align-items: center; /* Center vertically */
-        justify-content: center; /* Center horizontally */
+        justify-content: center;
     }
     
     #text, #animation {
-        font-size: 20px;
-        line-height: 1.5;
+        font-size: 18px;
+        line-height: 1.6;
+        overflow-wrap: break-word;
+        word-wrap: break-word;
+        hyphens: auto;
+        max-width: 100%;
     }
     
     /* Improve touch target size */
